@@ -601,21 +601,25 @@ export default function App() {
 
   useEffect(() => () => { wsRef.current?.close(); }, []);
 
-  const runQuery = useCallback(() => {
+ const runQuery = useCallback(async () => {
     if (!query.trim() || running) return;
     setResult(null); setSteps([]);
     setSelected(null); setView("companies");
     setRunning(true);
-    const ws = new WebSocket("ws://localhost:8000/ws/run");
-    wsRef.current = ws;
-    ws.onopen  = () => ws.send(JSON.stringify({ query }));
-    ws.onmessage = (e) => {
-      const data = JSON.parse(e.data);
-      if (data.type === "step")  setSteps(prev => [...prev, data.payload]);
-      if (data.type === "final") { setResult(data.payload); ws.close(); setRunning(false); }
-    };
-    ws.onerror = () => setRunning(false);
-    ws.onclose = () => setRunning(false);
+
+    try {
+      const res = await fetch("https://gtm-intelligence.onrender.com/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+      const data = await res.json();
+      setResult(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRunning(false);
+    }
   }, [query, running]);
 
   const sorted = result?.results ? [...result.results].sort((a, b) =>
