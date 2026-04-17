@@ -22,7 +22,7 @@ class RetrievalAgent:
             state.raw_results = results
 
             state.add_trace(f"retrieved {len(results)} records")
-            state.add_log(f"raw_results: {len(results)}")
+            state.add_log(f"raw_results: {len(state.raw_results)}")
 
             return state
 
@@ -46,7 +46,7 @@ class RetrievalAgent:
             item_industry = item.get("industry", "").lower()
             item_region = item.get("region", "").lower()
 
-            # --- Industry matching (flexible) ---
+            # --- Industry matching (flexible, unchanged logic) ---
             if industry in item_industry:
                 score += 2
             elif item_industry in industry:
@@ -65,9 +65,10 @@ class RetrievalAgent:
                     score += 1
 
             # --- Keep relevant results ---
-            if score > 0:
-                item["retrieval_score"] = score  # optional but useful
-                scored_results.append((score, item))
+            if score > 2:
+                item_copy = item.copy()  # prevent mutation issues
+                item_copy["retrieval_score"] = score
+                scored_results.append((score, item_copy))
 
         # --- Fallback ---
         if not scored_results:
