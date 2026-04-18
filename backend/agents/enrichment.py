@@ -36,7 +36,7 @@ class EnrichmentAgent:
                 state.add_trace("enrichment: no raw records to enrich")
                 return state
 
-            # ── Step 1: Apollo enrichment ────────────────────────────
+            # ── Step 1: Apollo enrichment 
             try:
                 raw = self.apollo.enrich(raw)
                 state.add_trace(f"enrichment: apollo added linkedin, revenue, intent scores for {len(raw)} records")
@@ -44,7 +44,7 @@ class EnrichmentAgent:
                 logger.warning(f"apollo enrichment failed: {e} — continuing without it")
                 state.add_trace(f"enrichment: apollo unavailable ({e}) — skipping")
 
-            # ── Step 2: Explorium enrichment ─────────────────────────
+            # ── Step 2: Explorium enrichment 
             try:
                 raw = self.explorium.enrich(raw)
                 state.add_trace(f"enrichment: explorium added growth trajectory + churn signals for {len(raw)} records")
@@ -52,7 +52,7 @@ class EnrichmentAgent:
                 logger.warning(f"explorium enrichment failed: {e} — continuing without it")
                 state.add_trace(f"enrichment: explorium unavailable ({e}) — skipping")
 
-            # ── Steps 3–5: Signal detection, ICP scoring, insights ───
+            # ── Steps 3–5: Signal detection, ICP scoring, insights 
             enriched: List[Dict[str, Any]] = []
             all_signals: List[str] = []
 
@@ -63,7 +63,7 @@ class EnrichmentAgent:
                 enriched.append(enriched_record)
                 all_signals.extend(enriched_record.get("signals", []))
 
-            # ── Step 6: Explicit ranking by ICP score ────────────────
+            # ── Step 6: Explicit ranking by ICP score 
             enriched = sorted(enriched, key=lambda x: x.get("icp_score", 0), reverse=True)
             state.add_trace(
                 f"enrichment: ranked {len(enriched)} records by ICP score — "

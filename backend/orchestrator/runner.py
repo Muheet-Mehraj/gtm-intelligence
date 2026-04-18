@@ -27,7 +27,7 @@ class Runner:
         self.vector_store = VectorStore()
         self.tracer       = Tracer()
 
-    # ── MAIN PIPELINE (REST) ──────────────────────────────────────────
+    # ── MAIN PIPELINE (REST) 
 
     def run(self, query: str) -> Dict[str, Any]:
         # Exact cache hit
@@ -57,7 +57,7 @@ class Runner:
             self.tracer.start(f"attempt_{attempt}")
 
             try:
-                # ── PLANNER ──────────────────────────────────────────
+                # ── PLANNER 
                 self.tracer.start("planner")
                 if state.retry_count > 0:
                     # Pass structured feedback if available
@@ -71,7 +71,7 @@ class Runner:
                     )
                 state = self.planner(state)
 
-                # ── RETRIEVAL ─────────────────────────────────────────
+                # ── RETRIEVAL 
                 self.tracer.start("retrieval")
                 state = self.retrieval(state)
 
@@ -99,7 +99,7 @@ class Runner:
                     state.reset_for_retry()
                     continue
 
-                # ── ENRICHMENT ────────────────────────────────────────
+                # ── ENRICHMENT 
                 self.tracer.start("enrichment")
                 state = self.enrichment(state)
 
@@ -113,11 +113,11 @@ class Runner:
                             f"{', '.join(new_signals)}"
                         )
 
-                # ── CRITIC ────────────────────────────────────────────
+                # ── CRITIC 
                 self.tracer.start("critic")
                 state = self._safe_critic(state)
 
-                # ── DECISION ──────────────────────────────────────────
+                # ── DECISION 
                 if state.critic_status == "PASS":
                     logger.info(f"critic passed on attempt {attempt}")
                     state.add_trace(
@@ -155,7 +155,7 @@ class Runner:
 
         return self._finalize_fallback(state, query)
 
-    # ── MEMORY HELPERS ────────────────────────────────────────────────
+    # ── MEMORY HELPERS 
 
     def _merge_with_memory(self, fresh: List[Dict], past: List[Dict]) -> List[Dict]:
         seen = {r.get("company", "").lower() for r in fresh}
@@ -168,7 +168,7 @@ class Runner:
                 seen.add(name)
         return merged
 
-    # ── SAFE CRITIC ───────────────────────────────────────────────────
+    # ── SAFE CRITIC 
 
     def _safe_critic(self, state: AgentState) -> AgentState:
         try:
@@ -181,7 +181,7 @@ class Runner:
             state.add_trace(f"critic crashed ({str(e)}) — defaulting to PASS")
             return state
 
-    # ── SUCCESS PATH ──────────────────────────────────────────────────
+    # ── SUCCESS PATH 
 
     def _finalize_success(self, state: AgentState, query: str) -> Dict[str, Any]:
         try:
@@ -206,7 +206,7 @@ class Runner:
 
         return result
 
-    # ── FALLBACK PATH ─────────────────────────────────────────────────
+    # ── FALLBACK PATH 
 
     def _finalize_fallback(self, state: AgentState, query: str) -> Dict[str, Any]:
         logger.warning(f"max retries ({state.max_retries}) reached — fallback mode")
@@ -233,7 +233,7 @@ class Runner:
             self.vector_store.add(query, state.enriched_results, state.signals)
         return result
 
-    # ── WEBSOCKET STEP EXECUTION ──────────────────────────────────────
+    # ── WEBSOCKET STEP EXECUTION 
 
     def create_state(self, query: str) -> AgentState:
         return AgentState(query=query)
@@ -261,7 +261,7 @@ class Runner:
     def get_spans(self):
         return self.tracer.get_trace()
 
-    # ── HELPERS ───────────────────────────────────────────────────────
+    # ── HELPERS 
 
     def _build_response(self, state: AgentState) -> Dict[str, Any]:
         return {

@@ -29,7 +29,7 @@ async def stream_run(websocket: WebSocket):
                 "data": payload,
             })
 
-        # ── Planner ───────────────────────────────────────────────
+        # ── Planner 
         await emit("planner", "running", "Decomposing query into execution plan...")
         try:
             state = runner.run_planner(state)
@@ -44,13 +44,13 @@ async def stream_run(websocket: WebSocket):
             await websocket.send_json({"type": "fatal", "message": "Planner failed"})
             return
 
-        # ── Retry loop ────────────────────────────────────────────
+        # ── Retry loop 
         MAX_RETRIES = 2
         attempt = 0
 
         while attempt <= MAX_RETRIES:
 
-            # ── Retrieval ─────────────────────────────────────────
+            # ── Retrieval 
             await emit("retrieval", "running", f"Querying data sources (attempt {attempt + 1})...")
             try:
                 state = runner.run_retrieval(state)
@@ -62,7 +62,7 @@ async def stream_run(websocket: WebSocket):
                 await emit("retrieval", "error", str(e))
                 break
 
-            # ── Enrichment ────────────────────────────────────────
+            # ── Enrichment 
             await emit("enrichment", "running", "Enriching records with signals and ICP scores...")
             try:
                 state = runner.run_enrichment(state)
@@ -74,7 +74,7 @@ async def stream_run(websocket: WebSocket):
                 await emit("enrichment", "error", str(e))
                 break
 
-            # ── Critic ────────────────────────────────────────────
+            # ── Critic 
             await emit("critic", "running", "Validating results for relevance and hallucinations...")
             try:
                 state = runner.run_critic(state)
@@ -135,7 +135,7 @@ async def stream_run(websocket: WebSocket):
                 await emit("critic", "error", str(e))
                 break
 
-        # ── GTM Strategy ──────────────────────────────────────────
+        # ── GTM Strategy 
         await emit("gtm_strategy", "running", "Generating personalized outreach strategy...")
         try:
             state = runner.run_gtm(state)
@@ -150,7 +150,7 @@ async def stream_run(websocket: WebSocket):
         except Exception as e:
             await emit("gtm_strategy", "error", str(e))
 
-        # ── Compute confidence ────────────────────────────────────
+        # ── Compute confidence 
         if not state.enriched_results:
             confidence = 0.3
         elif state.retry_count == 0:
@@ -166,7 +166,7 @@ async def stream_run(websocket: WebSocket):
             f"(retries={state.retry_count}, results={len(state.enriched_results)})"
         )
 
-        # ── Final result ──────────────────────────────────────────
+        # ── Final result 
         await websocket.send_json({
             "type": "result",
             "data": {

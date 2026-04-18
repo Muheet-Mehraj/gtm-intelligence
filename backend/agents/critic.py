@@ -107,7 +107,7 @@ class CriticAgent:
             state.errors.append(str(e))
             return self._fail(state, f"critic exception: {str(e)}")
 
-    # ── Hallucination detection ───────────────────────────────────────
+    # ── Hallucination detectio
 
     def _detect_hallucination(self, query: str, plan: Dict[str, Any]) -> str:
         query_lower = query.lower()
@@ -137,7 +137,7 @@ class CriticAgent:
 
         return ""
 
-    # ── Industry mismatch ─────────────────────────────────────────────
+    # ── Industry mismatch 
 
     def _detect_industry_mismatch(self, query: str, data: List[Dict], plan: Dict) -> str:
         expected = plan.get("filters", {}).get("industry", "").lower()
@@ -154,7 +154,7 @@ class CriticAgent:
             return f"only {matched}/{len(data)} results match industry '{expected}'"
         return ""
 
-    # ── Region mismatch ───────────────────────────────────────────────
+    # ── Region mismatch 
 
     def _detect_region_mismatch(self, query: str, data: List[Dict], plan: Dict) -> str:
         expected = plan.get("filters", {}).get("region", "global").lower()
@@ -167,7 +167,7 @@ class CriticAgent:
             return f"0/{len(data)} results match expected region '{expected}'"
         return ""
 
-    # ── Relevance check ───────────────────────────────────────────────
+    # ── Relevance check 
 
     def _is_relevant(self, query: str, data: List[Dict]) -> bool:
         keywords = [
@@ -186,7 +186,7 @@ class CriticAgent:
             if len(w) > 4 and w not in STOP_WORDS
         ][:4]
 
-    # ── Quality check ─────────────────────────────────────────────────
+    # ── Quality check 
 
     def _has_low_quality(self, data: List[Dict]) -> bool:
         required = ["company", "industry", "region", "employees", "funding"]
@@ -198,7 +198,7 @@ class CriticAgent:
         # Fail only if majority of records are bad
         return bad > len(data) / 2
 
-    # ── Verdict helpers ───────────────────────────────────────────────
+    # ── Verdict helpers 
 
     def _retry(self, state: AgentState, feedback: Dict[str, Any]) -> AgentState:
         reason = feedback.get("suggestion", "unknown reason")

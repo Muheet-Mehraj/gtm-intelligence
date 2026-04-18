@@ -69,7 +69,7 @@ class GTMStrategyAgent:
             state.gtm_strategy = {"hooks": [], "angles": [], "email_snippets": []}
             return state
 
-    # ── Hook — combines multiple signals for specificity ─────────────
+    # ── Hook — combines multiple signals for specificity 
 
     def _generate_hook(
         self,
@@ -111,7 +111,7 @@ class GTMStrategyAgent:
             f", with {parts[2]}" if len(parts) > 2 else ""
         )
 
-    # ── Angle — insight-driven, not template-driven ───────────────────
+    # ── Angle — insight-driven, not template-driven 
 
     def _generate_angle(
         self,
@@ -159,7 +159,7 @@ class GTMStrategyAgent:
 
         return insight or "lead with outcome-based ROI and comparable case studies"
 
-    # ── Email — specific, not generic ────────────────────────────────
+    # ── Email — specific, not generic 
 
     def _generate_email(
         self,
@@ -186,7 +186,7 @@ class GTMStrategyAgent:
             f"Best"
         )
 
-    # ── Multi-persona targeting ───────────────────────────────────────
+    # ── Multi-persona targeting 
 
     def _generate_personas(
         self, company: str, signals: List[str], insight: str, industry: str, tech: List[str]
@@ -271,7 +271,7 @@ class GTMStrategyAgent:
             "cta": "Want me to send over our API docs? Fastest 5-minute read this week.",
         }
 
-    # ── Competitive intelligence ──────────────────────────────────────
+    # ── Competitive intelligence 
 
     def _generate_competitive(
         self, company: str, signals: List[str], industry: str, tech: List[str]

@@ -69,7 +69,7 @@ class PlannerAgent:
     ) -> Dict[str, Any]:
         query_lower = query.lower()
 
-        # ── Base extraction ──────────────────────────────────────────
+        # ── Base extraction 
         industry = self._extract_industry(query_lower)
         region   = self._extract_region(query_lower)
         keywords = self._extract_keywords(query_lower)
@@ -77,7 +77,7 @@ class PlannerAgent:
         search_looseness = "strict"
         confidence = 0.75
 
-        # ── Deep adaptation from structured critic feedback ──────────
+        # ── Deep adaptation from structured critic feedback 
         if structured_fb:
             error_code = structured_fb.get("error", "")
             adjust     = structured_fb.get("adjust", {})
@@ -161,7 +161,7 @@ class PlannerAgent:
             "critic_feedback_applied": structured_fb.get("error") or (plain_fb or None),
         }
 
-    # ── Extraction helpers ────────────────────────────────────────────
+    # ── Extraction helpers 
 
     def _extract_industry(self, query_lower: str) -> str:
         if any(w in query_lower for w in ["fintech", "finance", "banking", "payments"]):

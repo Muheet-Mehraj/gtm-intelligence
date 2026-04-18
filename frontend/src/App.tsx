@@ -326,7 +326,7 @@ function CompanyCard({ c, selected, onClick }: { c: Company; selected: boolean; 
         </div>
       )}
 
-      {/* ✅ SINGLE insight + spacing */}
+      {/* SINGLE insight + spacing */}
       <div style={{ marginTop: "6px" }}>
         <div className="insight">
           <span className="ia">↳</span>
@@ -455,7 +455,7 @@ function DetailPanel({ company, result }: { company: Company | null; result: GTM
   );
 }
 
-/* ─── MAIN APP ── */
+/* ── MAIN APP ── */
 export default function App() {
   const [query, setQuery]       = useState("");
   const [result, setResult]     = useState<GTMResult | null>(null);
@@ -536,7 +536,7 @@ export default function App() {
     b.confidence - a.confidence
   ) : [];
 
-  // ✅ FIX #3: show retry count from result
+  //  show retry count from result
   const retryCount = result?.retry_count ?? 0;
 
   return (
@@ -571,7 +571,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ✅ FIX #3: retry banner — shown when pipeline had to retry */}
+      {/*  retry banner — shown when pipeline had to retry */}
       {result && retryCount > 0 && (
         <div className="retry-banner">
           <div className="retry-banner-dot" />
@@ -594,7 +594,7 @@ export default function App() {
                   <div>
                     <div className="step-lbl">
                       {STEP_LABELS[s.step] ?? s.step.toUpperCase()}
-                      {/* ✅ FIX #3: retry badge on critic step */}
+                      {/*  retry badge on critic step */}
                       {s.status === "retry" && <span className="retry-badge">RETRY</span>}
                     </div>
                     <div className="step-dtl">{s.detail}</div>
