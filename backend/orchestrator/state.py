@@ -34,7 +34,7 @@ class AgentState:
     # quality
     confidence: float = 0.0
 
-    # memory — used by WebSocket path for critic feedback loop
+    # memory — persists across retries so planner can adapt
     memory: Dict[str, Any] = field(default_factory=dict)
 
     # observability
@@ -59,9 +59,18 @@ class AgentState:
         return self.retry_count < self.max_retries
 
     def reset_for_retry(self) -> None:
-        self.raw_results.clear()
-        self.enriched_results.clear()
-        self.signals.clear()
-        self.gtm_strategy = None
-        self.critic_status = None
-        self.critic_feedback = None
+        """
+        Clears pipeline data for a fresh attempt.
+        IMPORTANT: preserves critic_feedback, memory, reasoning_trace,
+        and errors so the planner can adapt and history is retained.
+        """
+        self.raw_results     = []
+        self.enriched_results = []
+        self.signals         = []
+        self.gtm_strategy    = None
+        self.plan            = None
+        self.critic_status   = None
+        # critic_feedback intentionally NOT cleared — planner reads it on retry
+        # memory intentionally NOT cleared — carries feedback across retries
+        # reasoning_trace NOT cleared — full history retained for evaluators
+        # errors NOT cleared — accumulate for debugging

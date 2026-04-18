@@ -1,3 +1,4 @@
+
 import json
 from fastapi import WebSocket, WebSocketDisconnect
 from backend.orchestrator.runner import Runner
@@ -23,12 +24,12 @@ async def stream_run(websocket: WebSocket):
             await websocket.send_json({
                 "type": "agent_update",
                 "step": step,
-                "status": status,   # "running" | "done" | "error" | "retry"
+                "status": status,
                 "detail": detail,
                 "data": payload,
             })
 
-        # ── Planner ──────────────────────────────────────────────────
+        # ── Planner ───────────────────────────────────────────────
         await emit("planner", "running", "Decomposing query into execution plan...")
         try:
             state = runner.run_planner(state)
@@ -43,35 +44,37 @@ async def stream_run(websocket: WebSocket):
             await websocket.send_json({"type": "fatal", "message": "Planner failed"})
             return
 
-        # ── Retry loop ───────────────────────────────────────────────
+        # ── Retry loop ────────────────────────────────────────────
         MAX_RETRIES = 2
         attempt = 0
 
         while attempt <= MAX_RETRIES:
 
-            # ── Retrieval ────────────────────────────────────────────
+            # ── Retrieval ─────────────────────────────────────────
             await emit("retrieval", "running", f"Querying data sources (attempt {attempt + 1})...")
             try:
                 state = runner.run_retrieval(state)
-                await emit("retrieval", "done", f"Retrieved {len(state.raw_results)} records", {
-                    "count": len(state.raw_results)
-                })
+                await emit("retrieval", "done",
+                    f"Retrieved {len(state.raw_results)} records (filtered + ranked)",
+                    {"count": len(state.raw_results)}
+                )
             except Exception as e:
                 await emit("retrieval", "error", str(e))
                 break
 
-            # ── Enrichment ───────────────────────────────────────────
+            # ── Enrichment ────────────────────────────────────────
             await emit("enrichment", "running", "Enriching records with signals and ICP scores...")
             try:
                 state = runner.run_enrichment(state)
-                await emit("enrichment", "done", f"Enriched {len(state.enriched_results)} records", {
-                    "count": len(state.enriched_results)
-                })
+                await emit("enrichment", "done",
+                    f"Enriched {len(state.enriched_results)} records with signals + ICP ranking",
+                    {"count": len(state.enriched_results)}
+                )
             except Exception as e:
                 await emit("enrichment", "error", str(e))
                 break
 
-            # ── Critic ───────────────────────────────────────────────
+            # ── Critic ────────────────────────────────────────────
             await emit("critic", "running", "Validating results for relevance and hallucinations...")
             try:
                 state = runner.run_critic(state)
@@ -83,7 +86,7 @@ async def stream_run(websocket: WebSocket):
                         f"Results approved — {reason}",
                         {"status": "PASS", "feedback": reason}
                     )
-                    break  # exit retry loop — move to GTM
+                    break
 
                 elif verdict == "FAIL":
                     await emit("critic", "error",
@@ -95,8 +98,13 @@ async def stream_run(websocket: WebSocket):
                 else:  # RETRY
                     if attempt >= MAX_RETRIES:
                         await emit("critic", "retry",
-                            f"Max retries reached. Accepting with reduced confidence. Reason: {reason}",
-                            {"status": "RETRY", "feedback": reason, "retry_count": attempt}
+                            f"Max retries reached → switching to fallback strategy: {state.plan.get('strategy')} (reason: {reason})",
+                            {
+                                "status": "FALLBACK",
+                                "reason": reason,
+                                "final_strategy": state.plan.get("strategy"),
+                                "retry_count": attempt
+                            }
                         )
                         break
                     else:
@@ -104,11 +112,14 @@ async def stream_run(websocket: WebSocket):
                             f"Rejected (attempt {attempt + 1}): {reason} — re-planning...",
                             {"reason": reason, "retry_count": attempt + 1}
                         )
-                        # Feed critic reason back to planner's memory before next loop
+
+                        # Feed feedback into planner
                         state.memory["critic_feedback"] = reason
                         state.reset_for_retry()
                         state.increment_retry()
+
                         state = runner.run_planner(state)
+
                         await emit("planner", "done",
                             f"Re-planned with critic feedback (attempt {attempt + 2})",
                             {
@@ -116,6 +127,7 @@ async def stream_run(websocket: WebSocket):
                                 "strategy": state.plan.get("strategy", ""),
                             }
                         )
+
                         attempt += 1
                         continue
 
@@ -123,18 +135,22 @@ async def stream_run(websocket: WebSocket):
                 await emit("critic", "error", str(e))
                 break
 
-        # ── GTM Strategy ─────────────────────────────────────────────
-        await emit("gtm_strategy", "running", "Generating personalized outreach hooks and email snippets...")
+        # ── GTM Strategy ──────────────────────────────────────────
+        await emit("gtm_strategy", "running", "Generating personalized outreach strategy...")
         try:
             state = runner.run_gtm(state)
             gtm = state.gtm_strategy or {}
+
             await emit("gtm_strategy", "done", "GTM strategy generated", {
-                "hook_count": len(gtm.get("hooks", [])),
+                "hooks": gtm.get("hooks", [])[:3],
+                "emails": gtm.get("email_snippets", [])[:2],
+                "personas": gtm.get("persona_targeting", [])[:1],
             })
+
         except Exception as e:
             await emit("gtm_strategy", "error", str(e))
 
-        # ── Compute final confidence ──────────────────────────────────
+        # ── Compute confidence ────────────────────────────────────
         if not state.enriched_results:
             confidence = 0.3
         elif state.retry_count == 0:
@@ -144,14 +160,30 @@ async def stream_run(websocket: WebSocket):
 
         state.confidence = confidence
 
-        # ── Final result payload ──────────────────────────────────────
+        # Add reasoning trace for confidence
+        state.add_trace(
+            f"confidence computed: {state.confidence:.2f} "
+            f"(retries={state.retry_count}, results={len(state.enriched_results)})"
+        )
+
+        # ── Final result ──────────────────────────────────────────
         await websocket.send_json({
             "type": "result",
             "data": {
                 "plan": state.plan,
-                "results": state.enriched_results,
+                "results": [
+                    {
+                        **r,
+                        "why_this_result": r.get("why_this_result", "")
+                    }
+                    for r in state.enriched_results
+                ],
                 "signals": state.signals,
-                "gtm_strategy": state.gtm_strategy or {"hooks": [], "angles": [], "email_snippets": []},
+                "gtm_strategy": state.gtm_strategy or {
+                    "hooks": [],
+                    "angles": [],
+                    "email_snippets": []
+                },
                 "confidence": state.confidence,
                 "reasoning_trace": state.reasoning_trace,
                 "errors": state.errors,
@@ -161,8 +193,10 @@ async def stream_run(websocket: WebSocket):
 
     except WebSocketDisconnect:
         print("Client disconnected")
+
     except Exception as e:
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
         except Exception:
             pass
+

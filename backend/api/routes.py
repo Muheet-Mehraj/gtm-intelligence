@@ -9,6 +9,9 @@ router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 
 
+runner = Runner()
+
+
 class QueryRequest(BaseModel):
     query: str
 
@@ -17,7 +20,6 @@ class QueryRequest(BaseModel):
 @limiter.limit("20/minute")
 def run_pipeline(request: Request, body: QueryRequest):
     try:
-        runner = Runner()
         result = runner.run(body.query)
         return result
 
