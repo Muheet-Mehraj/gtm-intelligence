@@ -1,7 +1,7 @@
-# 🚀 GTM Intelligence
+# GTM Intelligence
 
-> Multi-agent outbound intelligence engine. Takes a natural language ICP query and returns enriched, scored target accounts with personalized GTM strategy.
-> Designed to simulate how real GTM teams identify, validate, and target high-value accounts.
+> Multi-agent outbound intelligence engine that converts a natural language ICP query into enriched, scored target accounts with personalized GTM strategy.
+> Designed to simulate how GTM teams identify, validate, and target high-value accounts.
 
 ---
 
@@ -14,7 +14,7 @@ Given a natural language ICP query, this system:
 * Validates results using a Critic agent to eliminate hallucinations and mismatches
 * Generates personalized outbound GTM strategies tailored to specific personas
 
-All steps run through a multi-agent pipeline with autonomous retry loops and real-time WebSocket streaming.
+All steps execute through a multi-agent pipeline with autonomous retry loops and real-time WebSocket streaming.
 
 ---
 
@@ -32,7 +32,7 @@ Query
      └─────────────────────────────────────────────────────────┘
 ```
 
-All agents share a central `AgentState` object. The Critic can reject results and feed structured feedback back to the Planner, which adjusts its plan and re-runs the pipeline (up to 3 retries).
+All agents share a central `AgentState` object. The Critic can reject results and provide structured feedback to the Planner, which adjusts the execution plan and re-runs the pipeline (up to three retries).
 
 ---
 
@@ -40,24 +40,24 @@ All agents share a central `AgentState` object. The Critic can reject results an
 
 Unlike traditional linear enrichment pipelines:
 
-* **Autonomous Correction** — Critic agent validates results and triggers intelligent retries
-* **Explainable AI** — Maintains a reasoning trace for every agent decision
-* **End-to-End Pipeline** — Retrieval, enrichment, validation, and GTM strategy in one system
-* **Live Visibility** — Real-time streaming of agent steps via WebSocket
+* **Autonomous correction** — The Critic agent validates outputs and triggers retries when necessary
+* **Explainability** — Maintains a reasoning trace across all agent decisions
+* **End-to-end execution** — Retrieval, enrichment, validation, and GTM strategy generation in a unified pipeline
+* **Real-time visibility** — Streams intermediate agent updates via WebSocket
 
 ---
 
 ## Example
 
-**Query:**
+**Query**
 `"Identify fintech startups hiring aggressively in the US"`
 
-**Output includes:**
+**Output includes**
 
 * **Company:** Rippling
 * **Signals:** enterprise_scale, hiring_aggressively, growth_funding
 * **Insight:** Scaling team post-Series F with strong outbound potential
-* **Why:** High headcount growth + funding stage + strong intent signals
+* **Why:** High headcount growth, funding stage, and intent signals
 * **GTM Strategy:** Persona-specific outreach for VP Sales, CEO, and CTO
 
 ---
@@ -67,7 +67,7 @@ Unlike traditional linear enrichment pipelines:
 ### Multi-Agent Orchestration
 
 * **Planner** — Converts natural language into a structured execution plan
-* **Retrieval** — Fetches candidate companies using industry/region/keyword matching
+* **Retrieval** — Fetches candidate companies using industry, region, and keyword matching
 * **Enrichment** — Computes ICP scores, signals, insights, and `why_this_result`
 * **Critic** — Validates relevance, hallucinations, and output quality
 * **GTM Strategy** — Generates personalized messaging and positioning
@@ -78,23 +78,23 @@ Unlike traditional linear enrichment pipelines:
 
 * Critic returns: `PASS | RETRY | FAIL`
 * On `RETRY`, feedback is stored in `state.memory["critic_feedback"]`
-* Planner adjusts query (region, industry, scope) and retries
-* Max 3 retries with full reasoning trace preserved
+* Planner adjusts filters (region, industry, scope) and retries
+* Maximum of three retries with full reasoning trace preserved
 
 ---
 
 ### Memory System
 
-* **SessionMemory** — TTL-based cache (5 minutes) for instant repeat queries
+* **SessionMemory** — TTL-based cache (5 minutes) for repeated queries
 * **VectorStore** — Similarity-based retrieval of past query-result pairs
 
 ---
 
 ### ICP Scoring Engine
 
-Multi-factor scoring including:
+Multi-factor scoring includes:
 
-* Signal weights (growth, hiring, funding, etc.)
+* Signal weighting (growth, hiring, funding)
 * Employee band scoring
 * Funding stage scoring
 * Intent signals (Apollo, Explorium)
@@ -124,13 +124,13 @@ Generates tailored messaging for:
 * CEO
 * CTO
 
-Each includes pain points, hooks, and CTAs.
+Each persona includes specific pain points, value propositions, and call-to-action strategies.
 
 ---
 
 ### Competitive Intelligence
 
-Infers competitive stack and generates positioning strategy based on signals and industry.
+Infers competitive stack and generates positioning strategy based on industry and detected signals.
 
 ---
 
@@ -144,9 +144,9 @@ ws://localhost:8000/ws/run
 
 Streams:
 
-* agent updates
-* reasoning steps
-* final results
+* Agent updates
+* Reasoning steps
+* Final results
 
 ---
 
@@ -157,7 +157,7 @@ Streams:
 | Empty retrieval  | Soft fallback to broader match |
 | Critic RETRY     | Planner re-runs with feedback  |
 | Critic FAIL      | Hard stop with error           |
-| Enrichment error | Skip record, continue          |
+| Enrichment error | Skip record and continue       |
 | GTM error        | Return partial result          |
 | Critic crash     | Default to PASS                |
 
@@ -215,7 +215,7 @@ Send:
 Receive:
 
 * `agent_update` events
-* final `result`
+* Final `result`
 
 ---
 
