@@ -5,6 +5,14 @@
 
 ---
 
+## Live Demo
+
+* Frontend: https://gtm-intelligence-taupe.vercel.app/
+* Backend API: https://gtm-intelligence.onrender.com
+* WebSocket: wss://gtm-intelligence.onrender.com/ws/run
+
+---
+
 ## What this does
 
 Given a natural language ICP query, this system:
@@ -139,7 +147,7 @@ Infers competitive stack and generates positioning strategy based on industry an
 Frontend connects to:
 
 ```
-ws://localhost:8000/ws/run
+wss://gtm-intelligence.onrender.com/ws/run
 ```
 
 Streams:
@@ -175,7 +183,7 @@ Streams:
 
 ---
 
-## Running Locally
+## Local Development
 
 ```bash
 # Backend
@@ -223,7 +231,7 @@ Receive:
 
 Each run produces:
 
-* `reasoning_trace` — step-by-step agent decisions
+* `reasoning_trace` — summarized agent decision flow
 * `spans` — structured tracing events
 * `errors` — accumulated failures
 * `retry_count` — number of retries
