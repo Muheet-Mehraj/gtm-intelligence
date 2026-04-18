@@ -1,189 +1,127 @@
 # GTM Intelligence
 
-> Multi-agent outbound intelligence engine that converts a natural language ICP query into enriched, scored target accounts with personalized GTM strategy.
-> Designed to simulate how GTM teams identify, validate, and target high-value accounts.
+> Multi-agent outbound intelligence engine. Takes a natural language ICP query and returns enriched, scored target accounts with personalized GTM strategy — through iterative self-correction, not single-pass generation.
 
 ---
 
-## Live Demo
+## Why this system
 
-* Frontend: https://gtm-intelligence-taupe.vercel.app/
-* Backend API: https://gtm-intelligence.onrender.com
-* WebSocket: wss://gtm-intelligence.onrender.com/ws/run
+Most GTM tooling produces static outputs: run a query, get a list, move on. Real GTM teams don't work that way — they validate, refine, and adapt based on feedback before acting.
 
----
+This system is designed to mirror that workflow. It combines data retrieval, ICP scoring, and strategy generation inside a critic-driven feedback loop that iteratively improves its own outputs. If results are weak, misaligned, or hallucinated, the system catches it and re-plans — without human intervention.
 
-## What this does
-
-Given a natural language ICP query, this system:
-
-* Identifies high-fit target companies using multi-source retrieval
-* Enriches profiles with buying signals, intent data, and ICP scoring
-* Validates results using a Critic agent to eliminate hallucinations and mismatches
-* Generates personalized outbound GTM strategies tailored to specific personas
-
-All steps execute through a multi-agent pipeline with autonomous retry loops and real-time WebSocket streaming.
+The result is a pipeline that behaves less like a prompt chain and more like a junior analyst that checks its own work.
 
 ---
 
 ## Architecture
 
-```text
-Query
-  │
-  ▼
-┌──────────┐     ┌───────────┐     ┌─────────────┐     ┌────────┐     ┌──────────────┐
-│  Planner │────▶│ Retrieval │────▶│ Enrichment  │────▶│ Critic │────▶│ GTM Strategy │
-└──────────┘     └───────────┘     └─────────────┘     └────────┘     └──────────────┘
-     ▲                                                         │
-     │                   RETRY (critic feedback)               │
-     └─────────────────────────────────────────────────────────┘
-```
+The system is orchestrated as an iterative multi-agent pipeline with a critic-driven feedback loop, enabling self-correction and improved output quality over multiple passes.
 
-All agents share a central `AgentState` object. The Critic can reject results and provide structured feedback to the Planner, which adjusts the execution plan and re-runs the pipeline (up to three retries).
+![GTM Intelligence architecture](./docs/architecture.svg)
+
+All agents share a central `AgentState` object. The Critic evaluates enriched results and returns a structured verdict. On `RETRY`, it feeds specific, machine-readable feedback back to the Planner — which adjusts its plan and re-runs the full pipeline. This loop runs up to 3 times, preserving the full reasoning trace across every attempt.
 
 ---
 
-## Why this is different
+## Design Decisions
 
-Unlike traditional linear enrichment pipelines:
+**Critic-driven retry loop over single-pass output**
+Most pipelines trust their own output. This system doesn't. The Critic agent validates results before they reach the user — checking for hallucinations, region/industry mismatches, missing signals, and low relevance. On failure, it generates structured feedback (not just a flag) that the Planner uses to re-plan. This makes the system self-correcting without manual intervention.
 
-* **Autonomous correction** — The Critic agent validates outputs and triggers retries when necessary
-* **Explainability** — Maintains a reasoning trace across all agent decisions
-* **End-to-end execution** — Retrieval, enrichment, validation, and GTM strategy generation in a unified pipeline
-* **Real-time visibility** — Streams intermediate agent updates via WebSocket
+**Heuristic scoring over hardcoded ranking**
+Retrieval and enrichment use weighted multi-factor scoring — signal weights, employee bands, funding stage, intent scores — rather than fixed ordering. This means results are ranked by genuine ICP fit, not position in a database.
 
----
+**Soft matching and fallback hierarchy**
+Strict filters can over-constrain queries and return nothing useful. The retrieval layer degrades gracefully: exact match → soft industry/region match → diverse sample fallback. This prevents empty results from propagating through the pipeline.
 
-## Example
+**Simulated real-world data imperfections**
+The system is built to handle missing fields, schema inconsistencies, and partial API failures — not just clean inputs. Enrichment exceptions skip the affected record and continue; GTM failures surface an error without crashing the run. This reflects how production data actually behaves.
 
-**Query**
-`"Identify fintech startups hiring aggressively in the US"`
-
-**Output includes**
-
-* **Company:** Rippling
-* **Signals:** enterprise_scale, hiring_aggressively, growth_funding
-* **Insight:** Scaling team post-Series F with strong outbound potential
-* **Why:** High headcount growth, funding stage, and intent signals
-* **GTM Strategy:** Persona-specific outreach for VP Sales, CEO, and CTO
+**Retry cap at 3 cycles**
+Unlimited retries would mask bad queries and inflate latency. Three cycles is enough to recover from retrieval misses and soft failures while forcing the system to surface a hard stop (`FAIL`) when the query is genuinely unanswerable.
 
 ---
 
-## System Capabilities
+## Handling Ambiguity
+
+Vague or incomplete queries are a real input condition, not an edge case. The system handles them through three mechanisms:
+
+- **Soft matching in retrieval** — when strict filters return too few candidates, the retrieval layer expands to broader keyword and region matching before falling back to a diverse sample
+- **Filter relaxation on retry** — if the Critic rejects results as too narrow or misaligned, the Planner can widen region scope, relax industry constraints, or shift entity type on the next pass
+- **Confidence signalling** — every pipeline run produces a `confidence` score (0.0–1.0) so downstream consumers know how much to trust the output
+
+---
+
+## Key Features
 
 ### Multi-Agent Orchestration
+Five specialized agents with clear separation of concerns:
+- **Planner** — converts natural language query into a structured execution plan (`entity_type`, `filters`, `tasks`, `strategy`, `confidence`)
+- **Retrieval** — fetches and scores candidate companies using industry + region + keyword matching with soft fallback
+- **Enrichment** — computes ICP scores, buying signals, insights, and `why_this_result` explanations per account
+- **Critic** — validates results for relevance, hallucinations, region/industry mismatch, quality, and signal presence; generates structured feedback for replanning
+- **GTM Strategy** — generates personalized email hooks, multi-persona messaging, and competitive positioning
 
-* **Planner** — Converts natural language into a structured execution plan
-* **Retrieval** — Fetches candidate companies using industry, region, and keyword matching
-* **Enrichment** — Computes ICP scores, signals, insights, and `why_this_result`
-* **Critic** — Validates relevance, hallucinations, and output quality
-* **GTM Strategy** — Generates personalized messaging and positioning
-
----
-
-### Retry Loop with Critic Feedback
-
-* Critic returns: `PASS | RETRY | FAIL`
-* On `RETRY`, feedback is stored in `state.memory["critic_feedback"]`
-* Planner adjusts filters (region, industry, scope) and retries
-* Maximum of three retries with full reasoning trace preserved
-
----
+### Critic Feedback Loop
+The Critic is not just a validator — it is a feedback engine. It returns `PASS | RETRY | FAIL` with a structured reason. On `RETRY`, that reason is stored in `state.memory["critic_feedback"]` and passed directly to the Planner, which uses it to adjust region, industry, or search scope before re-running the full pipeline. The full reasoning trace is preserved across all retry cycles, giving complete visibility into how the system corrected itself.
 
 ### Memory System
-
-* **SessionMemory** — TTL-based cache (5 minutes) for repeated queries
-* **VectorStore** — Similarity-based retrieval of past query-result pairs
-
----
+- **SessionMemory** — TTL-based exact query cache (5 min). Repeat queries return instantly without re-running the pipeline.
+- **VectorStore** — keyword-similarity store of past query→result pairs. Similar future queries are augmented with relevant past records and signals, improving retrieval quality over time.
 
 ### ICP Scoring Engine
-
-Multi-factor scoring includes:
-
-* Signal weighting (growth, hiring, funding)
-* Employee band scoring
-* Funding stage scoring
-* Intent signals (Apollo, Explorium)
-* Churn risk adjustments
-
----
+Multi-factor scoring in `enrichment.py`:
+- Signal weights (`growth_funding`, `hiring_aggressively`, `mid_market_growth`, etc.)
+- Employee band scoring
+- Funding stage scoring
+- Apollo intent score boost
+- Explorium GTM fit boost
+- Churn risk adjustment
 
 ### Buying Signal Detection
-
-Signals detected per company:
-
-* growth_funding
-* hiring_aggressively
-* enterprise_scale
-* mid_market_growth
-* early_stage_team
-* churn_risk
-* late_stage
-
----
+Signals detected per company: `growth_funding`, `mid_market_growth`, `enterprise_scale`, `early_stage_team`, `hiring_aggressively`, `churn_risk`, `late_stage`.
 
 ### Multi-Persona Targeting
-
-Generates tailored messaging for:
-
-* VP Sales
-* CEO
-* CTO
-
-Each persona includes specific pain points, value propositions, and call-to-action strategies.
-
----
+GTM Strategy agent generates tailored messaging for VP Sales, CEO, and CTO — each with persona-specific pain points, value props, hooks, and CTAs.
 
 ### Competitive Intelligence
-
-Infers competitive stack and generates positioning strategy based on industry and detected signals.
-
----
+Per-company competitive stack inference and positioning strategy based on industry and detected signals.
 
 ### Streaming via WebSocket
-
-Frontend connects to:
-
-```
-wss://gtm-intelligence.onrender.com/ws/run
-```
-
-Streams:
-
-* Agent updates
-* Reasoning steps
-* Final results
+The frontend connects to `ws://localhost:8000/ws/run` and receives live `agent_update` events as each pipeline step completes, with real-time timeline updates in the UI.
 
 ---
 
 ## Failure Handling
 
-| Failure Mode     | Response                       |
-| ---------------- | ------------------------------ |
-| Empty retrieval  | Soft fallback to broader match |
-| Critic RETRY     | Planner re-runs with feedback  |
-| Critic FAIL      | Hard stop with error           |
-| Enrichment error | Skip record and continue       |
-| GTM error        | Return partial result          |
-| Critic crash     | Default to PASS                |
+The system is designed to degrade gracefully under real-world conditions — partial data, API failures, and over-constrained queries are all handled explicitly rather than crashing the run.
+
+| Failure Mode | Response |
+|---|---|
+| Empty retrieval | Soft fallback → industry/region soft match → diverse sample |
+| Critic RETRY | Planner re-plans with structured feedback; up to 3 attempts |
+| Critic FAIL | Hard stop, return errors |
+| Enrichment exception | Skip record, continue pipeline |
+| GTM exception | Return empty strategy, surface error |
+| Critic crash | Default to PASS, log warning |
 
 ---
 
 ## Tech Stack
 
-| Layer         | Technology                |
-| ------------- | ------------------------- |
-| Backend       | FastAPI + Python          |
-| Streaming     | WebSocket                 |
-| Frontend      | React + TypeScript + Vite |
-| Memory        | TTL Cache + Vector Store  |
-| Observability | Logging + Reasoning Trace |
+| Layer | Technology |
+|---|---|
+| Backend | FastAPI + Python |
+| WebSocket | FastAPI WebSocket |
+| Rate Limiting | slowapi |
+| Frontend | React + TypeScript + Vite |
+| Memory | In-memory TTL cache + keyword vector store |
+| Observability | Structured logging + reasoning trace + span tracer |
 
 ---
 
-## Local Development
+## Running Locally
 
 ```bash
 # Backend
@@ -197,44 +135,31 @@ npm install
 npm run dev
 ```
 
-* Backend: http://localhost:8000
-* Frontend: http://localhost:5173
+Backend runs on `http://localhost:8000`  
+Frontend runs on `http://localhost:5173`
 
 ---
 
 ## API
 
 ### POST `/run`
+Rate limited: 20 requests/minute
 
 ```json
 { "query": "Find high-growth AI SaaS companies in the US" }
 ```
 
----
-
 ### WebSocket `/ws/run`
-
-Send:
-
-```json
-{ "query": "..." }
-```
-
-Receive:
-
-* `agent_update` events
-* Final `result`
+Send: `{ "query": "..." }`  
+Receive: stream of `agent_update` events + final `result`
 
 ---
 
 ## Observability
 
-Each run produces:
-
-* `reasoning_trace` — summarized agent decision flow
-* `spans` — structured tracing events
-* `errors` — accumulated failures
-* `retry_count` — number of retries
-* `confidence` — final pipeline confidence score (0.0–1.0)
-
----
+Every pipeline run produces a complete audit trail:
+- `reasoning_trace` — human-readable log of every agent decision
+- `spans` — structured tracer events per agent
+- `errors` — accumulated error list
+- `retry_count` — number of critic-triggered replanning cycles
+- `confidence` — final pipeline confidence score (0.0–1.0)
