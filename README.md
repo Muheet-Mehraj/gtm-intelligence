@@ -4,6 +4,16 @@
 
 ---
 
+## 🌐 Live Demo
+
+| | |
+|---|---|
+| Frontend | https://gtm-intelligence-taupe.vercel.app/ |
+| Backend API | https://gtm-intelligence.onrender.com |
+| WebSocket | wss://gtm-intelligence.onrender.com/ws/run |
+
+---
+
 ## Why this system
 
 Most GTM tooling produces static outputs: run a query, get a list, move on. Real GTM teams don't work that way — they validate, refine, and adapt based on feedback before acting.
