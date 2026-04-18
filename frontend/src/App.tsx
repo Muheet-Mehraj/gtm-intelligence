@@ -691,9 +691,9 @@ export default function App() {
                   <div className="fetching">Fetching results…</div>
                 )}
 
-               </div>  {/* ← VERY IMPORTANT: close list */}
+               </div>  {/* */}
               </>
-             )} {/* Close view === "companies" block */}
+             )} {/* */}
 
              {/* Detail View */}
              {view === "detail" && result && (
@@ -702,8 +702,8 @@ export default function App() {
 
             </div>
           )} 
-        </div> {/* Close right-panel */}
-      </div> {/* Close body */}
+        </div> 
+      </div> 
     </div> 
   );
 }

@@ -107,7 +107,7 @@ class CriticAgent:
             state.errors.append(str(e))
             return self._fail(state, f"critic exception: {str(e)}")
 
-    # ── Hallucination detectio
+    # ── Hallucination detection
 
     def _detect_hallucination(self, query: str, plan: Dict[str, Any]) -> str:
         query_lower = query.lower()

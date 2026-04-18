@@ -44,7 +44,7 @@ class RetrievalAgent:
     """
 
     # Simulate failure rate: ~15% chance of transient API error
-    FAILURE_RATE = 0.15
+    FAILURE_RATE = 0.0
     # Simulate partial data rate: ~20% of records have missing fields
     PARTIAL_RATE = 0.20
 
