@@ -4,6 +4,7 @@ import time
 from typing import List, Dict, Any
 
 from backend.orchestrator.state import AgentState
+from backend.tools.mcp_retrieval import MCPRetrievalTool
 
 logger = logging.getLogger("gtm.retrieval")
 
@@ -35,6 +36,7 @@ class ExternalAPIError(Exception):
 class RetrievalAgent:
     """
     Fetches data based on planner output.
+    Merges mock/API results with real signals from Gmail + Google Drive via MCP.
     Simulates real-world retrieval behaviour:
       - transient API failures (triggering critic retry)
       - partial / missing fields
@@ -43,10 +45,11 @@ class RetrievalAgent:
       - noisy records that must be filtered
     """
 
-    # Simulate failure rate: ~15% chance of transient API error
     FAILURE_RATE = 0.0
-    # Simulate partial data rate: ~20% of records have missing fields
     PARTIAL_RATE = 0.20
+
+    def __init__(self):
+        self.mcp = MCPRetrievalTool()
 
     def __call__(self, state: AgentState) -> AgentState:
         logger.info("retrieval started")
@@ -54,7 +57,7 @@ class RetrievalAgent:
         try:
             plan = state.plan or {}
 
-            # Simulate variable latency (real APIs have this)
+            # Simulate variable latency
             simulated_latency = random.uniform(0.05, 0.2)
             time.sleep(simulated_latency)
             state.add_trace(f"retrieval: data source responded in {simulated_latency:.2f}s")
@@ -63,13 +66,36 @@ class RetrievalAgent:
             if random.random() < self.FAILURE_RATE and state.retry_count == 0:
                 raise ExternalAPIError("data source timeout — connection refused (simulated)")
 
+            # ── Step 1: fetch from mock / Explorium data ──────────────
             results = self._fetch(plan, state)
 
-            # Simulate schema noise: inject partial records
-            results = self._inject_real_world_noise(results, state)
+            # ── Step 2: merge real signals from Gmail + Google Drive ──
+            try:
+                mcp_records = self.mcp.fetch(plan)
+                if mcp_records:
+                    existing_names = {r.get("company", "").lower() for r in results}
+                    added = 0
+                    for rec in mcp_records:
+                        name = rec.get("company", "").lower()
+                        if name and name not in existing_names:
+                            results.append(rec)
+                            existing_names.add(name)
+                            added += 1
+                    state.add_trace(
+                        f"MCP enrichment: +{added} records from Gmail/Drive "
+                        f"(total: {len(results)})"
+                    )
+                else:
+                    state.add_trace("MCP enrichment: no additional records from Gmail/Drive")
+            except Exception as e:
+                # MCP failure must never crash the pipeline
+                logger.warning(f"MCP retrieval skipped: {e}")
+                state.add_trace(f"MCP retrieval unavailable: {str(e)[:80]}")
 
-            # Filter out records too corrupted to use
+            # ── Step 3: inject real-world noise + filter corrupt ──────
+            results = self._inject_real_world_noise(results, state)
             clean, dropped = self._filter_corrupt(results)
+
             if dropped:
                 state.add_trace(
                     f"retrieval: dropped {dropped} corrupt/partial records — "
@@ -77,7 +103,7 @@ class RetrievalAgent:
                 )
 
             state.raw_results = clean
-            state.add_trace(f"retrieved {len(clean)} records")
+            state.add_trace(f"retrieved {len(clean)} records (filtered + ranked)")
             state.add_log(f"raw_results: {len(state.raw_results)}")
             return state
 
@@ -100,7 +126,6 @@ class RetrievalAgent:
         region = filters.get("region", "global").strip().lower()
         keywords = [k.lower() for k in filters.get("keywords", [])]
 
-        # On retry: loosen filters based on critic guidance
         strategy = plan.get("strategy", "")
         looseness = plan.get("search_looseness", "strict")
 
@@ -115,7 +140,6 @@ class RetrievalAgent:
             item_industry = item.get("industry", "").lower()
             item_region = item.get("region", "").lower()
 
-            # Industry matching
             if industry_variants:
                 if item_industry in industry_variants:
                     score += 3
@@ -124,11 +148,10 @@ class RetrievalAgent:
                 elif any(item_industry in v for v in industry_variants):
                     score += 1
                 elif looseness == "broad":
-                    score += 0.5  # on retry: credit even weak matches
+                    score += 0.5
             else:
                 score += 1
 
-            # Region matching
             if region == "global":
                 score += 1
             elif item_region in region_variants:
@@ -138,14 +161,12 @@ class RetrievalAgent:
             elif looseness == "broad":
                 score += 0.5
 
-            # Keyword boost
             item_str = str(item).lower()
             for kw in keywords:
                 for word in kw.split():
                     if len(word) > 3 and word in item_str:
                         score += 1
 
-            # Signal boost
             signals = item.get("signals", [])
             for kw in keywords:
                 for sig in signals:
@@ -158,7 +179,6 @@ class RetrievalAgent:
                 item_copy["retrieval_score"] = round(score, 2)
                 scored_results.append((score, item_copy))
 
-        # Soft fallback
         if not scored_results:
             logger.warning("no strict matches — trying soft fallback")
             state.add_trace("retrieval: strict match failed — activating soft fallback")
@@ -177,7 +197,6 @@ class RetrievalAgent:
                     scored_results.append((soft_score, item_copy))
             scored_results.sort(key=lambda x: x[0], reverse=True)
 
-        # Last resort diverse sample
         if not scored_results:
             logger.warning("no fallback matches — returning diverse sample")
             state.add_trace(
@@ -201,19 +220,18 @@ class RetrievalAgent:
     def _inject_real_world_noise(
         self, records: List[Dict[str, Any]], state: AgentState
     ) -> List[Dict[str, Any]]:
-        """
-        Simulate real-world data quality issues:
-        - missing fields (incomplete API response)
-        - inconsistent schema (different field names)
-        - stale / zero employee count
-        """
         noisy = []
         noise_count = 0
 
         for record in records:
             r = record.copy()
-            roll = random.random()
 
+            # Skip noise injection for MCP-sourced records (they're already real)
+            if r.get("data_source") in ("gmail", "gdrive"):
+                noisy.append(r)
+                continue
+
+            roll = random.random()
             if roll < self.PARTIAL_RATE:
                 noise_count += 1
                 noise_type = random.choice(["missing_employees", "missing_funding",
@@ -222,17 +240,13 @@ class RetrievalAgent:
                 if noise_type == "missing_employees":
                     r.pop("employees", None)
                     r["_data_issue"] = "employees_missing"
-
                 elif noise_type == "missing_funding":
                     r.pop("funding", None)
                     r["_data_issue"] = "funding_missing"
-
                 elif noise_type == "schema_variant":
-                    # Different field name (inconsistent schema from data provider)
                     if "employees" in r:
                         r["headcount"] = r.pop("employees")
                     r["_data_issue"] = "schema_variant"
-
                 elif noise_type == "stale_data":
                     r["employees"] = 0
                     r["_data_issue"] = "stale_headcount"
@@ -248,24 +262,21 @@ class RetrievalAgent:
         return noisy
 
     def _filter_corrupt(self, records: List[Dict[str, Any]]) -> tuple:
-        """
-        Normalise schema variants and drop records too broken to enrich.
-        Returns (clean_records, dropped_count).
-        """
         clean = []
         dropped = 0
 
         for r in records:
-            # Normalise schema variant: headcount → employees
             if "headcount" in r and "employees" not in r:
                 r["employees"] = r.pop("headcount")
 
-            # Must have company name and at least one of: industry or region
-            has_company = bool(r.get("company"))
-            has_context = bool(r.get("industry") or r.get("region"))
+            has_company  = bool(r.get("company"))
+            has_context  = bool(r.get("industry") or r.get("region"))
             has_employees = isinstance(r.get("employees"), int) and r["employees"] > 0
 
-            if has_company and has_context and has_employees:
+            # MCP records with 0 employees are allowed through (real data, unknown headcount)
+            is_mcp = r.get("data_source") in ("gmail", "gdrive")
+
+            if has_company and has_context and (has_employees or is_mcp):
                 clean.append(r)
             else:
                 dropped += 1
