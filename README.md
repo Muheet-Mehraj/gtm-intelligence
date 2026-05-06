@@ -34,6 +34,26 @@ All agents share a central `AgentState` object. The Critic evaluates enriched re
 
 ---
 
+## MCP Integration
+
+The retrieval agent connects to real data sources via the **Model Context Protocol (MCP)**:
+
+| MCP Server | What it does |
+|---|---|
+| Gmail MCP | Searches inbox for emails mentioning target companies or industry keywords — extracts buying signals, hiring mentions, and funding references |
+| Google Drive MCP | Scans documents (CRM exports, prospect lists, research docs, meeting notes) for company intel and sales targets |
+
+Real records from MCP are merged with the mock/Explorium dataset and deduplicated by company name. Each MCP-sourced record carries a `data_source` field (`"gmail"` or `"gdrive"`) and is passed through the same enrichment, ICP scoring, and GTM strategy pipeline as all other records.
+
+MCP failures are isolated — if Gmail or Drive is unavailable, the pipeline continues with mock data and logs the skip reason in the reasoning trace. This ensures MCP never crashes the pipeline.
+
+```
+tools/mcp_retrieval.py   ← MCP tool (Gmail + Drive)
+agents/retrieval.py      ← merges MCP results with mock data
+```
+
+---
+
 ## Design Decisions
 
 **Critic-driven retry loop over single-pass output**
@@ -47,6 +67,9 @@ Strict filters can over-constrain queries and return nothing useful. The retriev
 
 **Simulated real-world data imperfections**
 The system is built to handle missing fields, schema inconsistencies, and partial API failures — not just clean inputs. Enrichment exceptions skip the affected record and continue; GTM failures surface an error without crashing the run. This reflects how production data actually behaves.
+
+**MCP as an additive layer, not a dependency**
+The MCP retrieval tool augments results without blocking the pipeline. If no matching emails or documents are found, the system proceeds normally. This makes MCP a genuine signal amplifier rather than a fragile integration point.
 
 **Retry cap at 3 cycles**
 Unlimited retries would mask bad queries and inflate latency. Three cycles is enough to recover from retrieval misses and soft failures while forcing the system to surface a hard stop (`FAIL`) when the query is genuinely unanswerable.
@@ -68,7 +91,7 @@ Vague or incomplete queries are a real input condition, not an edge case. The sy
 ### Multi-Agent Orchestration
 Five specialized agents with clear separation of concerns:
 - **Planner** — converts natural language query into a structured execution plan (`entity_type`, `filters`, `tasks`, `strategy`, `confidence`)
-- **Retrieval** — fetches and scores candidate companies using industry + region + keyword matching with soft fallback
+- **Retrieval** — fetches and scores candidate companies using industry + region + keyword matching with soft fallback; merges real signals from Gmail + Drive via MCP
 - **Enrichment** — computes ICP scores, buying signals, insights, and `why_this_result` explanations per account
 - **Critic** — validates results for relevance, hallucinations, region/industry mismatch, quality, and signal presence; generates structured feedback for replanning
 - **GTM Strategy** — generates personalized email hooks, multi-persona messaging, and competitive positioning
@@ -98,8 +121,8 @@ GTM Strategy agent generates tailored messaging for VP Sales, CEO, and CTO — e
 ### Competitive Intelligence
 Per-company competitive stack inference and positioning strategy based on industry and detected signals.
 
-### Streaming via WebSocket
-The frontend connects to `ws://localhost:8000/ws/run` and receives live `agent_update` events as each pipeline step completes, with real-time timeline updates in the UI.
+### Real-time Streaming via WebSocket
+The frontend connects to `/ws/run` and receives live `agent_update` events as each pipeline step completes — showing agent status, retry indicators, and confidence updates in real time.
 
 ---
 
@@ -110,6 +133,7 @@ The system is designed to degrade gracefully under real-world conditions — par
 | Failure Mode | Response |
 |---|---|
 | Empty retrieval | Soft fallback → industry/region soft match → diverse sample |
+| MCP unavailable | Log and skip — pipeline continues with mock data |
 | Critic RETRY | Planner re-plans with structured feedback; up to 3 attempts |
 | Critic FAIL | Hard stop, return errors |
 | Enrichment exception | Skip record, continue pipeline |
@@ -125,19 +149,55 @@ The system is designed to degrade gracefully under real-world conditions — par
 | Backend | FastAPI + Python |
 | WebSocket | FastAPI WebSocket |
 | Rate Limiting | slowapi |
+| MCP Integration | Anthropic MCP client — Gmail + Google Drive |
 | Frontend | React + TypeScript + Vite |
 | Memory | In-memory TTL cache + keyword vector store |
 | Observability | Structured logging + reasoning trace + span tracer |
 
 ---
 
+## Project Structure
+
+```
+backend/
+├── agents/
+│   ├── planner.py        # query → structured plan
+│   ├── retrieval.py      # plan → data + MCP merge
+│   ├── enrichment.py     # signals, ICP scoring, insights
+│   ├── critic.py         # validation + retry logic
+│   └── gtm_strategy.py   # hooks, emails, personas, competitive
+├── orchestrator/
+│   ├── runner.py         # execution loop + retry handling
+│   └── state.py          # shared AgentState dataclass
+├── memory/
+│   ├── short_term.py     # TTL session cache
+│   └── vector_store.py   # keyword similarity store
+├── tools/
+│   ├── mcp_retrieval.py  # Gmail + Drive via MCP
+│   ├── explorium.py      # Explorium mock
+│   ├── apollo.py         # Apollo mock
+│   └── scoring.py        # ICP scoring engine
+├── api/
+│   ├── main.py           # FastAPI app + WebSocket route
+│   ├── routes.py         # POST /run
+│   └── websocket.py      # streaming agent updates
+└── observability/
+    ├── logger.py
+    └── tracer.py
+
+frontend/
+└── src/
+    └── App.tsx           # React UI with agent timeline
+```
+
+---
+
 ## Running Locally
 
 ```bash
-# Backend
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+# Backend (run from project root)
+source venv/Scripts/activate        # Windows
+python -m uvicorn backend.api.main:app --reload --port 8000
 
 # Frontend
 cd frontend
@@ -162,6 +222,12 @@ Rate limited: 20 requests/minute
 ### WebSocket `/ws/run`
 Send: `{ "query": "..." }`  
 Receive: stream of `agent_update` events + final `result`
+
+```json
+{ "type": "agent_update", "step": "planner", "status": "done", "detail": "..." }
+{ "type": "agent_update", "step": "critic",  "status": "retry", "detail": "..." }
+{ "type": "result", "data": { "plan": {}, "results": [], "gtm_strategy": {}, "confidence": 0.9 } }
+```
 
 ---
 
