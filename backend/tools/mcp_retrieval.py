@@ -55,6 +55,12 @@ class MCPRetrievalTool:
         except Exception as e:
             logger.warning(f"MCP Drive failed: {e}")
 
+        print("\n===== FINAL MCP RESULTS =====")
+        for r in results:
+            print(r.get("company"), "->", r.get("data_source"))
+
+        print("TOTAL MCP RESULTS:", len(results))
+         
         return results
 
     # ── Gmail search ──────────────────────────────────────────────────
@@ -160,6 +166,10 @@ Rules:
         Calls Claude with an MCP server attached.
         Parses the JSON array response into company records.
         """
+        print(f"\n===== MCP CALL START [{source_label}] =====")
+        print("MCP URL:", mcp_url)
+        print("Prompt Preview:", prompt[:300])
+
         response = self.client.beta.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1500,
@@ -179,9 +189,14 @@ Rules:
         for block in response.content:
             if hasattr(block, "text"):
                 text += block.text
+        print(f"\n===== MCP RESPONSE [{source_label}] =====")
+        print(text[:2000])        
 
         # Parse JSON array from response
         records = self._parse_records(text, source_label)
+        print(f"\n===== PARSED RECORDS [{source_label}] =====")
+        print(records)
+        print(f"TOTAL RECORDS: {len(records)}")
         return records
 
     # ── Response parser ───────────────────────────────────────────────
