@@ -122,6 +122,10 @@ class GTMStrategyAgent:
                     personas.append({"company": company, "personas": self._generate_personas(company, signals, insight, industry, tech)})
                     competitive.append({"company": company, "competitive": self._generate_competitive(company, signals, industry, tech)})
 
+            state.memory.setdefault("metrics", {})["gtm_strategy"] = {
+                "source":            "groq/llama-3.3-70b-versatile",
+                "records_processed": len(hooks),
+            }
             state.gtm_strategy = {
                 "hooks":                    hooks,
                 "angles":                   angles,
@@ -143,6 +147,7 @@ class GTMStrategyAgent:
             return state
 
     def _llm_strategy(self, record: Dict[str, Any]) -> Dict[str, Any] | None:
+        
         t0 = time.time()
 
         payload = {
@@ -169,6 +174,7 @@ class GTMStrategyAgent:
                 ],
                 temperature=0.3,
                 max_tokens=800,
+                response_format={"type": "json_object"},
             )
 
             latency  = round(time.time() - t0, 2)
