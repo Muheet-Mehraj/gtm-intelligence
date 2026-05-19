@@ -1,5 +1,8 @@
-import logging
+from dotenv import load_dotenv
+load_dotenv()
 
+import logging
+import backend.config
 from fastapi import FastAPI, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler

@@ -1,5 +1,10 @@
+import json
 import logging
+import os
+import re
+import time
 from typing import Dict, Any, List
+
 from backend.orchestrator.state import AgentState
 from backend.tools.apollo import ApolloClient
 from backend.tools.explorium import ExploriumClient
@@ -7,23 +12,53 @@ from backend.tools.scoring import score_company
 
 logger = logging.getLogger("gtm.enrichment")
 
+ENRICHMENT_SYSTEM_PROMPT = """You are a GTM enrichment analyst. Given a company's data and detected signals, generate two things:
+
+1. insight: a single concise sentence summarising why this company is an interesting GTM target right now
+2. why_this_result: a short explanation (max 2 sentences) of what specific data points make this company a strong ICP match
+
+You will receive a JSON object with company fields: name, industry, region, employees, funding, tech_stack, signals, apollo_intent_score, growth_trajectory, churn_risk_flag, explorium_fit_score.
+
+Return ONLY a JSON object with this exact schema:
+{
+  "insight": "<one sentence>",
+  "why_this_result": "<one to two sentences>"
+}
+
+Be specific — reference actual signals, funding stage, headcount, or tech stack where relevant.
+No preamble, no markdown fences."""
+
 
 class EnrichmentAgent:
     """
     Transforms raw data into enriched signals, insights, and ICP scores.
 
     Pipeline:
-      1. Apollo enrichment  — linkedin, revenue, intent score, open roles
-      2. Explorium enrichment — growth trajectory, churn risk, buying signal strength
-      3. Signal detection   — from raw + enriched fields
-      4. ICP scoring        — via scoring.score_company() (uses all enriched fields)
-      5. Insight generation — human-readable summary
-      6. Ranking            — explicit sort by icp_score descending
+      1. Apollo enrichment: linkedin, revenue, intent score, open roles
+      2. Explorium enrichment: growth trajectory, churn risk, buying signal strength
+      3. Signal detection: from raw and enriched fields
+      4. ICP scoring: via scoring.score_company()
+      5. Insight and why_this_result: LLM-generated (Groq) or heuristic fallback
+      6. Ranking: sort by icp_score descending
     """
 
     def __init__(self):
         self.apollo    = ApolloClient()
         self.explorium = ExploriumClient()
+        self._groq_client = None
+        self._init_groq()
+
+    def _init_groq(self):
+        try:
+            from groq import Groq
+            api_key = os.getenv("GROQ_API_KEY")
+            if api_key:
+                self._groq_client = Groq(api_key=api_key)
+                logger.info("enrichment: Groq client initialised")
+            else:
+                logger.warning("enrichment: GROQ_API_KEY not set — will use heuristic fallback")
+        except ImportError:
+            logger.warning("enrichment: groq package not installed — will use heuristic fallback")
 
     def __call__(self, state: AgentState) -> AgentState:
         logger.info("enrichment started")
@@ -36,7 +71,6 @@ class EnrichmentAgent:
                 state.add_trace("enrichment: no raw records to enrich")
                 return state
 
-            # ── Step 1: Apollo enrichment 
             try:
                 raw = self.apollo.enrich(raw)
                 state.add_trace(f"enrichment: apollo added linkedin, revenue, intent scores for {len(raw)} records")
@@ -44,7 +78,6 @@ class EnrichmentAgent:
                 logger.warning(f"apollo enrichment failed: {e} — continuing without it")
                 state.add_trace(f"enrichment: apollo unavailable ({e}) — skipping")
 
-            # ── Step 2: Explorium enrichment 
             try:
                 raw = self.explorium.enrich(raw)
                 state.add_trace(f"enrichment: explorium added growth trajectory + churn signals for {len(raw)} records")
@@ -52,7 +85,6 @@ class EnrichmentAgent:
                 logger.warning(f"explorium enrichment failed: {e} — continuing without it")
                 state.add_trace(f"enrichment: explorium unavailable ({e}) — skipping")
 
-            # ── Steps 3–5: Signal detection, ICP scoring, insights 
             enriched: List[Dict[str, Any]] = []
             all_signals: List[str] = []
 
@@ -63,7 +95,9 @@ class EnrichmentAgent:
                 enriched.append(enriched_record)
                 all_signals.extend(enriched_record.get("signals", []))
 
-            # ── Step 6: Explicit ranking by ICP score 
+            if self._groq_client and enriched:
+                enriched = self._llm_enrich_batch(enriched)
+
             enriched = sorted(enriched, key=lambda x: x.get("icp_score", 0), reverse=True)
             state.add_trace(
                 f"enrichment: ranked {len(enriched)} records by ICP score — "
@@ -90,15 +124,84 @@ class EnrichmentAgent:
             state.signals = []
             return state
 
+    def _llm_enrich_batch(self, enriched: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Call Groq once per record to generate LLM insight and why_this_result.
+        Falls back to heuristic values per record if the LLM call fails.
+        """
+        t0 = time.time()
+        success_count = 0
+
+        for record in enriched:
+            try:
+                payload = {
+                    "name":               record.get("company"),
+                    "industry":           record.get("industry"),
+                    "region":             record.get("region"),
+                    "employees":          record.get("employees"),
+                    "funding":            record.get("funding"),
+                    "tech_stack":         record.get("tech_stack", []),
+                    "signals":            record.get("signals", []),
+                    "apollo_intent_score":record.get("apollo_intent_score", 0),
+                    "growth_trajectory":  record.get("growth_trajectory"),
+                    "churn_risk_flag":    record.get("churn_risk_flag", False),
+                    "explorium_fit_score":record.get("explorium_fit_score", 0),
+                }
+
+                response = self._groq_client.chat.completions.create(
+                    model="llama-3.3-70b-versatile",
+                    messages=[
+                        {"role": "system", "content": ENRICHMENT_SYSTEM_PROMPT},
+                        {"role": "user",   "content": json.dumps(payload)},
+                    ],
+                    temperature=0.2,
+                    max_tokens=200,
+                )
+
+                raw_text = response.choices[0].message.content.strip()
+                parsed   = self._parse_llm_response(raw_text)
+
+                if parsed:
+                    record["insight"]         = parsed.get("insight", record["insight"])
+                    record["why_this_result"] = parsed.get("why_this_result", record["why_this_result"])
+                    success_count += 1
+                else:
+                    logger.warning(f"enrichment LLM: unparseable response for {record.get('company')} — keeping heuristic")
+
+            except Exception as e:
+                logger.warning(f"enrichment LLM: failed for {record.get('company')} ({e}) — keeping heuristic")
+
+        latency = round(time.time() - t0, 2)
+        logger.info(f"enrichment LLM: {success_count}/{len(enriched)} records enriched in {latency}s")
+
+        return enriched
+
+    def _parse_llm_response(self, text: str) -> Dict[str, Any] | None:
+        text = re.sub(r"```json|```", "", text).strip()
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError:
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            if not match:
+                return None
+            try:
+                data = json.loads(match.group())
+            except json.JSONDecodeError:
+                return None
+
+        if "insight" not in data or "why_this_result" not in data:
+            return None
+
+        return data
+
     def _enrich(self, record: Dict[str, Any]) -> Dict[str, Any]:
         company   = record.get("company")
         employees = record.get("employees")
         funding   = record.get("funding")
         tech      = record.get("tech_stack", [])
 
-        signals = list(record.get("signals", []))  # preserve signals from retrieval
+        signals = list(record.get("signals", []))
 
-        # Derive additional signals from enriched fields
         if employees:
             if employees > 1000 and "enterprise_scale" not in signals:
                 signals.append("enterprise_scale")
@@ -115,24 +218,21 @@ class EnrichmentAgent:
             elif "Late" in funding and "late_stage" not in signals:
                 signals.append("late_stage")
 
-        # Apollo-derived signals
         if record.get("apollo_intent_score", 0) > 0.7:
             signals.append("high_intent")
 
-        # Explorium-derived signals
-        if record.get("churn_risk_flag"):
-            if "churn_risk" not in signals:
-                signals.append("churn_risk")
+        if record.get("churn_risk_flag") and "churn_risk" not in signals:
+            signals.append("churn_risk")
 
-        signals = list(dict.fromkeys(signals))  # deduplicate preserving order
+        signals = list(dict.fromkeys(signals))
 
-        # ICP score via scoring tool (uses apollo + explorium fields too)
         record_for_scoring = dict(record, signals=signals)
-        icp_score = score_company(record_for_scoring)
+        icp_score  = score_company(record_for_scoring)
+        confidence = self._compute_confidence(record, signals)
 
-        confidence  = self._compute_confidence(record, signals)
-        insight     = self._derive_insight(signals, tech, funding)
-        why_result  = self._why_this_result(record, signals)
+        # Heuristic fallbacks — overwritten per record if LLM succeeds
+        insight    = self._derive_insight(signals, tech, funding)
+        why_result = self._why_this_result(record, signals)
 
         return {
             "company":         company,
@@ -146,16 +246,15 @@ class EnrichmentAgent:
             "confidence":      confidence,
             "icp_score":       icp_score,
             "why_this_result": why_result,
-            # Pass-through enriched fields for GTM strategy use
-            "linkedin_url":          record.get("linkedin_url"),
-            "revenue_estimate":      record.get("revenue_estimate"),
-            "tech_maturity":         record.get("tech_maturity"),
-            "open_roles":            record.get("open_roles", []),
-            "apollo_intent_score":   record.get("apollo_intent_score", 0),
-            "growth_trajectory":     record.get("growth_trajectory"),
-            "churn_risk_flag":       record.get("churn_risk_flag", False),
-            "buying_signal_strength":record.get("buying_signal_strength", "low"),
-            "explorium_fit_score":   record.get("explorium_fit_score", 0),
+            "linkedin_url":           record.get("linkedin_url"),
+            "revenue_estimate":       record.get("revenue_estimate"),
+            "tech_maturity":          record.get("tech_maturity"),
+            "open_roles":             record.get("open_roles", []),
+            "apollo_intent_score":    record.get("apollo_intent_score", 0),
+            "growth_trajectory":      record.get("growth_trajectory"),
+            "churn_risk_flag":        record.get("churn_risk_flag", False),
+            "buying_signal_strength": record.get("buying_signal_strength", "low"),
+            "explorium_fit_score":    record.get("explorium_fit_score", 0),
         }
 
     def _derive_insight(self, signals: List[str], tech: List[str], funding: str) -> str:

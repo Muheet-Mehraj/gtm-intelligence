@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Dict, Any, List
 
 from backend.orchestrator.state import AgentState
@@ -22,23 +23,19 @@ class Runner:
         self.critic     = CriticAgent()
         self.gtm        = GTMStrategyAgent()
 
-        # ✅ Module-level singleton ensures these persist across requests
         self.memory       = SessionMemory()
         self.vector_store = VectorStore()
         self.tracer       = Tracer()
 
-    # ── MAIN PIPELINE (REST) 
-
     def run(self, query: str) -> Dict[str, Any]:
-        # Exact cache hit
         cached = self.memory.get(query)
         if cached:
             logger.info("cache hit — returning cached result")
             return cached
 
-        state = AgentState(query=query)
+        state    = AgentState(query=query)
+        t_start  = time.time()
 
-        # Vector memory: inject past similar results
         past_results = self.vector_store.search(query)
         if past_results:
             logger.info(f"vector memory: {len(past_results)} similar past records found")
@@ -57,10 +54,8 @@ class Runner:
             self.tracer.start(f"attempt_{attempt}")
 
             try:
-                # ── PLANNER 
                 self.tracer.start("planner")
                 if state.retry_count > 0:
-                    # Pass structured feedback if available
                     structured = state.memory.get("critic_structured_feedback", {})
                     if structured:
                         state.memory["critic_feedback"] = structured.get("suggestion", "")
@@ -70,40 +65,36 @@ class Runner:
                         f"adjustments: {structured.get('adjust', {})}"
                     )
                 state = self.planner(state)
+                self._log_agent_source(state, "planner")
 
-                # ── RETRIEVAL 
                 self.tracer.start("retrieval")
                 state = self.retrieval(state)
 
-                # Augment with vector memory
                 if state.raw_results and past_results:
                     state.raw_results = self._merge_with_memory(state.raw_results, past_results)
                     state.add_trace(
-                        f"memory augmentation: merged {len(past_results)} past records "
-                        f"into retrieval results"
+                        f"memory augmentation: merged {len(past_results)} past records into retrieval results"
                     )
 
-                # Guard: empty retrieval
                 if not state.raw_results:
                     reason = "retrieval returned empty results — strict filters or API failure"
                     logger.warning(reason)
                     state.set_critic("RETRY", reason)
                     state.memory["critic_structured_feedback"] = {
-                        "error": "empty_results",
+                        "error":      "empty_results",
                         "suggestion": reason,
                         "confidence": 0.3,
-                        "adjust": {"region": "global", "search_looseness": "broad"},
+                        "adjust":     {"region": "global", "search_looseness": "broad"},
                     }
                     state.add_trace(f"retrieval guard: {reason} — forcing retry")
                     state.increment_retry()
                     state.reset_for_retry()
                     continue
 
-                # ── ENRICHMENT 
                 self.tracer.start("enrichment")
                 state = self.enrichment(state)
+                self._log_agent_source(state, "enrichment")
 
-                # Boost signals from vector memory
                 if past_signals := state.memory.get("past_signals", []):
                     new_signals = [s for s in past_signals if s not in state.signals]
                     if new_signals:
@@ -113,23 +104,19 @@ class Runner:
                             f"{', '.join(new_signals)}"
                         )
 
-                # ── CRITIC 
                 self.tracer.start("critic")
                 state = self._safe_critic(state)
+                self._log_agent_source(state, "critic")
 
-                # ── DECISION 
                 if state.critic_status == "PASS":
                     logger.info(f"critic passed on attempt {attempt}")
                     state.add_trace(
-                        f"pipeline: critic PASS on attempt {attempt} — "
-                        f"proceeding to GTM strategy"
+                        f"pipeline: critic PASS on attempt {attempt} — proceeding to GTM strategy"
                     )
-                    return self._finalize_success(state, query)
+                    return self._finalize_success(state, query, t_start)
 
                 if state.critic_status == "RETRY":
-                    logger.warning(
-                        f"retry {attempt}: {state.critic_feedback}"
-                    )
+                    logger.warning(f"retry {attempt}: {state.critic_feedback}")
                     state.add_trace(
                         f"pipeline: critic RETRY on attempt {attempt} — "
                         f"{state.critic_feedback} — incrementing retry count"
@@ -147,18 +134,26 @@ class Runner:
             except Exception as e:
                 logger.error(f"pipeline error on attempt {attempt}: {str(e)}")
                 state.errors.append(str(e))
-                state.add_trace(
-                    f"pipeline: unhandled exception on attempt {attempt}: {str(e)} — retrying"
-                )
+                state.add_trace(f"pipeline: unhandled exception on attempt {attempt}: {str(e)} — retrying")
                 state.increment_retry()
                 state.reset_for_retry()
 
-        return self._finalize_fallback(state, query)
+        return self._finalize_fallback(state, query, t_start)
 
-    # ── MEMORY HELPERS 
+    def _log_agent_source(self, state: AgentState, agent: str):
+        metrics = state.memory.get("metrics", {}).get(agent)
+        if metrics:
+            logger.info(
+                f"{agent} used LLM ({metrics.get('source')}) — "
+                f"latency={metrics.get('latency_s')}s "
+                f"tokens_in={metrics.get('tokens_in')} "
+                f"tokens_out={metrics.get('tokens_out')}"
+            )
+        else:
+            logger.info(f"{agent} used heuristic fallback")
 
     def _merge_with_memory(self, fresh: List[Dict], past: List[Dict]) -> List[Dict]:
-        seen = {r.get("company", "").lower() for r in fresh}
+        seen   = {r.get("company", "").lower() for r in fresh}
         merged = list(fresh)
         for record in past:
             name = record.get("company", "").lower()
@@ -167,8 +162,6 @@ class Runner:
                 merged.append(record)
                 seen.add(name)
         return merged
-
-    # ── SAFE CRITIC 
 
     def _safe_critic(self, state: AgentState) -> AgentState:
         try:
@@ -181,23 +174,27 @@ class Runner:
             state.add_trace(f"critic crashed ({str(e)}) — defaulting to PASS")
             return state
 
-    # ── SUCCESS PATH 
-
-    def _finalize_success(self, state: AgentState, query: str) -> Dict[str, Any]:
+    def _finalize_success(self, state: AgentState, query: str, t_start: float) -> Dict[str, Any]:
         try:
             self.tracer.start("gtm_strategy")
             state = self.gtm(state)
+            self._log_agent_source(state, "gtm_strategy")
         except Exception as e:
             logger.error(f"GTM error: {e}")
             state.gtm_strategy = self._empty_gtm()
             state.add_trace(f"GTM strategy failed: {str(e)} — returning empty strategy")
 
         state.confidence = self._compute_confidence(state)
+        total_latency    = round(time.time() - t_start, 2)
+
         state.add_trace(
             f"pipeline complete — confidence: {state.confidence:.0%}, "
             f"retries: {state.retry_count}, "
-            f"results: {len(state.enriched_results)}"
+            f"results: {len(state.enriched_results)}, "
+            f"total_latency: {total_latency}s"
         )
+
+        self._log_groq_summary(state)
 
         result = self._build_response(state)
         self.memory.set(query, result)
@@ -206,9 +203,7 @@ class Runner:
 
         return result
 
-    # ── FALLBACK PATH 
-
-    def _finalize_fallback(self, state: AgentState, query: str) -> Dict[str, Any]:
+    def _finalize_fallback(self, state: AgentState, query: str, t_start: float) -> Dict[str, Any]:
         logger.warning(f"max retries ({state.max_retries}) reached — fallback mode")
         state.add_trace(
             f"pipeline: max retries ({state.max_retries}) reached — "
@@ -226,14 +221,26 @@ class Runner:
             state.gtm_strategy = self._empty_gtm()
             state.add_trace("no results after all retries — empty GTM returned")
 
-        state.confidence = max(0.2, self._compute_confidence(state))
+        state.confidence  = max(0.2, self._compute_confidence(state))
+        total_latency     = round(time.time() - t_start, 2)
+        state.add_trace(f"fallback complete — total_latency: {total_latency}s")
+
         result = self._build_response(state)
         self.memory.set(query, result)
         if state.enriched_results:
             self.vector_store.add(query, state.enriched_results, state.signals)
         return result
 
-    # ── WEBSOCKET STEP EXECUTION 
+    def _log_groq_summary(self, state: AgentState):
+        metrics = state.memory.get("metrics", {})
+        if not metrics:
+            return
+        total_in  = sum(m.get("tokens_in", 0)  for m in metrics.values())
+        total_out = sum(m.get("tokens_out", 0) for m in metrics.values())
+        logger.info(
+            f"groq usage summary — agents: {list(metrics.keys())} "
+            f"total_tokens_in={total_in} total_tokens_out={total_out}"
+        )
 
     def create_state(self, query: str) -> AgentState:
         return AgentState(query=query)
@@ -261,8 +268,6 @@ class Runner:
     def get_spans(self):
         return self.tracer.get_trace()
 
-    # ── HELPERS 
-
     def _build_response(self, state: AgentState) -> Dict[str, Any]:
         return {
             "plan":            state.plan,
@@ -279,10 +284,9 @@ class Runner:
     def _compute_confidence(self, state: AgentState) -> float:
         if not state.enriched_results:
             return 0.2
-        base = 0.9 - (state.retry_count * 0.15)
-        # Boost for high avg ICP score
+        base    = 0.9 - (state.retry_count * 0.15)
         avg_icp = sum(r.get("icp_score", 0) for r in state.enriched_results) / len(state.enriched_results)
-        boost = avg_icp * 0.1
+        boost   = avg_icp * 0.1
         return round(max(0.3, min(1.0, base + boost)), 2)
 
     def _empty_gtm(self):

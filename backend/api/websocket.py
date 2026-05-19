@@ -1,5 +1,5 @@
-
 import json
+import time
 from fastapi import WebSocket, WebSocketDisconnect
 from backend.orchestrator.runner import Runner
 
@@ -10,47 +10,49 @@ async def stream_run(websocket: WebSocket):
     await websocket.accept()
 
     try:
-        data = await websocket.receive_json()
+        data  = await websocket.receive_json()
         query = data.get("query", "")
 
         if not query:
             await websocket.send_json({"type": "error", "message": "No query provided"})
             return
 
-        state = runner.create_state(query)
+        state   = runner.create_state(query)
+        t_start = time.time()
 
-        # Helper to emit agent status updates
         async def emit(step: str, status: str, detail: str = "", payload: dict = {}):
             await websocket.send_json({
-                "type": "agent_update",
-                "step": step,
+                "type":   "agent_update",
+                "step":   step,
                 "status": status,
                 "detail": detail,
-                "data": payload,
+                "data":   payload,
             })
 
-        # ── Planner 
+        def agent_source(agent_name: str) -> str:
+            metrics = state.memory.get("metrics", {}).get(agent_name)
+            return metrics.get("source", "heuristic") if metrics else "heuristic"
+
         await emit("planner", "running", "Decomposing query into execution plan...")
         try:
             state = runner.run_planner(state)
             await emit("planner", "done", "Execution plan created", {
                 "entity_type": state.plan.get("entity_type", ""),
-                "tasks": state.plan.get("tasks", []),
-                "confidence": state.plan.get("confidence", 0),
-                "strategy": state.plan.get("strategy", ""),
+                "tasks":       state.plan.get("tasks", []),
+                "confidence":  state.plan.get("confidence", 0),
+                "strategy":    state.plan.get("strategy", ""),
+                "source":      agent_source("planner"),
             })
         except Exception as e:
             await emit("planner", "error", str(e))
             await websocket.send_json({"type": "fatal", "message": "Planner failed"})
             return
 
-        # ── Retry loop 
         MAX_RETRIES = 2
-        attempt = 0
+        attempt     = 0
 
         while attempt <= MAX_RETRIES:
 
-            # ── Retrieval 
             await emit("retrieval", "running", f"Querying data sources (attempt {attempt + 1})...")
             try:
                 state = runner.run_retrieval(state)
@@ -62,58 +64,60 @@ async def stream_run(websocket: WebSocket):
                 await emit("retrieval", "error", str(e))
                 break
 
-            # ── Enrichment 
             await emit("enrichment", "running", "Enriching records with signals and ICP scores...")
             try:
                 state = runner.run_enrichment(state)
                 await emit("enrichment", "done",
                     f"Enriched {len(state.enriched_results)} records with signals + ICP ranking",
-                    {"count": len(state.enriched_results)}
+                    {
+                        "count":  len(state.enriched_results),
+                        "source": agent_source("enrichment"),
+                    }
                 )
             except Exception as e:
                 await emit("enrichment", "error", str(e))
                 break
 
-            # ── Critic 
             await emit("critic", "running", "Validating results for relevance and hallucinations...")
             try:
-                state = runner.run_critic(state)
+                state   = runner.run_critic(state)
                 verdict = state.critic_status
-                reason = state.critic_feedback or ""
+                reason  = state.critic_feedback or ""
+                source  = agent_source("critic")
 
                 if verdict == "PASS":
                     await emit("critic", "done",
                         f"Results approved — {reason}",
-                        {"status": "PASS", "feedback": reason}
+                        {"status": "PASS", "feedback": reason, "source": source}
                     )
                     break
 
                 elif verdict == "FAIL":
                     await emit("critic", "error",
                         f"Hard validation failure: {reason}",
-                        {"status": "FAIL", "feedback": reason}
+                        {"status": "FAIL", "feedback": reason, "source": source}
                     )
                     break
 
-                else:  # RETRY
+                else:
                     if attempt >= MAX_RETRIES:
                         await emit("critic", "retry",
-                            f"Max retries reached → switching to fallback strategy: {state.plan.get('strategy')} (reason: {reason})",
+                            f"Max retries reached — switching to fallback strategy: {state.plan.get('strategy')} (reason: {reason})",
                             {
-                                "status": "FALLBACK",
-                                "reason": reason,
+                                "status":         "FALLBACK",
+                                "reason":         reason,
                                 "final_strategy": state.plan.get("strategy"),
-                                "retry_count": attempt
+                                "retry_count":    attempt,
+                                "source":         source,
                             }
                         )
                         break
                     else:
                         await emit("critic", "retry",
                             f"Rejected (attempt {attempt + 1}): {reason} — re-planning...",
-                            {"reason": reason, "retry_count": attempt + 1}
+                            {"reason": reason, "retry_count": attempt + 1, "source": source}
                         )
 
-                        # Feed feedback into planner
                         state.memory["critic_feedback"] = reason
                         state.reset_for_retry()
                         state.increment_retry()
@@ -124,7 +128,8 @@ async def stream_run(websocket: WebSocket):
                             f"Re-planned with critic feedback (attempt {attempt + 2})",
                             {
                                 "entity_type": state.plan.get("entity_type", ""),
-                                "strategy": state.plan.get("strategy", ""),
+                                "strategy":    state.plan.get("strategy", ""),
+                                "source":      agent_source("planner"),
                             }
                         )
 
@@ -135,22 +140,21 @@ async def stream_run(websocket: WebSocket):
                 await emit("critic", "error", str(e))
                 break
 
-        # ── GTM Strategy 
         await emit("gtm_strategy", "running", "Generating personalized outreach strategy...")
         try:
             state = runner.run_gtm(state)
-            gtm = state.gtm_strategy or {}
+            gtm   = state.gtm_strategy or {}
 
             await emit("gtm_strategy", "done", "GTM strategy generated", {
-                "hooks": gtm.get("hooks", [])[:3],
-                "emails": gtm.get("email_snippets", [])[:2],
+                "hooks":    gtm.get("hooks", [])[:3],
+                "emails":   gtm.get("email_snippets", [])[:2],
                 "personas": gtm.get("persona_targeting", [])[:1],
+                "source":   agent_source("gtm_strategy"),
             })
 
         except Exception as e:
             await emit("gtm_strategy", "error", str(e))
 
-        # ── Compute confidence 
         if not state.enriched_results:
             confidence = 0.3
         elif state.retry_count == 0:
@@ -159,35 +163,33 @@ async def stream_run(websocket: WebSocket):
             confidence = max(0.5, 1 - (state.retry_count * 0.2))
 
         state.confidence = confidence
+        total_latency    = round(time.time() - t_start, 2)
 
-        # Add reasoning trace for confidence
         state.add_trace(
             f"confidence computed: {state.confidence:.2f} "
-            f"(retries={state.retry_count}, results={len(state.enriched_results)})"
+            f"(retries={state.retry_count}, results={len(state.enriched_results)}, "
+            f"total_latency={total_latency}s)"
         )
 
-        # ── Final result 
+        metrics = state.memory.get("metrics", {})
+        llm_agents = [name for name, m in metrics.items() if m.get("source")]
+
         await websocket.send_json({
             "type": "result",
             "data": {
-                "plan": state.plan,
-                "results": [
-                    {
-                        **r,
-                        "why_this_result": r.get("why_this_result", "")
-                    }
+                "plan":            state.plan,
+                "results":         [
+                    {**r, "why_this_result": r.get("why_this_result", "")}
                     for r in state.enriched_results
                 ],
-                "signals": state.signals,
-                "gtm_strategy": state.gtm_strategy or {
-                    "hooks": [],
-                    "angles": [],
-                    "email_snippets": []
-                },
-                "confidence": state.confidence,
+                "signals":         state.signals,
+                "gtm_strategy":    state.gtm_strategy or {"hooks": [], "angles": [], "email_snippets": []},
+                "confidence":      state.confidence,
                 "reasoning_trace": state.reasoning_trace,
-                "errors": state.errors,
-                "retry_count": state.retry_count,
+                "errors":          state.errors,
+                "retry_count":     state.retry_count,
+                "llm_agents":      llm_agents,
+                "total_latency_s": total_latency,
             }
         })
 
@@ -199,4 +201,3 @@ async def stream_run(websocket: WebSocket):
             await websocket.send_json({"type": "error", "message": str(e)})
         except Exception:
             pass
-

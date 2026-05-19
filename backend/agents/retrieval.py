@@ -19,7 +19,7 @@ REGION_ALIASES = {
 }
 
 INDUSTRY_ALIASES = {
-    "ai": ["ai", "artificial intelligence", "machine learning", "ml", "saas", "ai saas"],
+    "ai": ["ai", "artificial intelligence", "machine learning", "ml"],
     "saas": ["saas", "ai", "ai saas", "software", "cloud"],
     "fintech": ["fintech", "finance", "financial", "payments", "banking"],
     "health": ["health", "healthtech", "healthcare", "medtech", "medical", "biotech"],
@@ -130,15 +130,19 @@ class RetrievalAgent:
         looseness = plan.get("search_looseness", "strict")
 
         data = self._mock_data()
-        scored_results = []
-
         industry_variants = INDUSTRY_ALIASES.get(industry, [industry]) if industry else []
         region_variants = REGION_ALIASES.get(region, [region])
+        hard_filter = looseness != "broad" and bool(industry_variants)
+        scored_results = []
+       
 
         for item in data:
             score = 0
             item_industry = item.get("industry", "").lower()
             item_region = item.get("region", "").lower()
+            if hard_filter and item_industry not in industry_variants:
+                continue
+
 
             if industry_variants:
                 if item_industry in industry_variants:
