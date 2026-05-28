@@ -12,6 +12,8 @@
 | Backend API | https://gtm-intelligence.onrender.com |
 | WebSocket | wss://gtm-intelligence.onrender.com/ws/run |
 
+> ⚠️ **Cold start:** The backend is hosted on Render's free tier and may take **30–50 seconds to wake up** on first load. If the frontend shows no response initially, wait a moment and try again.
+
 ---  
 
 ## Why this system
