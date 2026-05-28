@@ -33,7 +33,6 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 
 .app { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
 
-/* ── HERO ── */
 .hero {
   text-align: center;
   padding: 36px 20px 24px;
@@ -47,7 +46,6 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .hero-sub { font-family: var(--mono); font-size: 11px; color: var(--text3); letter-spacing: 0.06em; margin-bottom: 24px; }
 .hero-sub .arr { color: var(--accent); margin: 0 4px; }
 
-/* ── SEARCH ── */
 .search-wrap { display: flex; gap: 10px; max-width: 780px; margin: 0 auto 14px; }
 .search-input {
   flex: 1; background: var(--bg2); border: 1px solid var(--border2); border-radius: var(--radius);
@@ -73,7 +71,6 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 }
 .sug-chip:hover { border-color: var(--accent); color: var(--accent); }
 
-/* ── RETRY BANNER ── */
 .retry-banner {
   display: flex; align-items: center; gap: 10px;
   background: rgba(240,168,48,0.08);
@@ -82,17 +79,11 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
   font-family: var(--mono); font-size: 11px; color: var(--gold);
   flex-shrink: 0;
 }
-.retry-banner-dot {
-  width: 7px; height: 7px; border-radius: 50%; background: var(--gold); flex-shrink: 0;
-}
-.retry-banner-count {
-  font-weight: 700; margin-right: 4px;
-}
+.retry-banner-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--gold); flex-shrink: 0; }
+.retry-banner-count { font-weight: 700; margin-right: 4px; }
 
-/* ── BODY ── */
 .body { display: grid; grid-template-columns: 260px 1fr; flex: 1; overflow: hidden; }
 
-/* ── SIDEBAR ── */
 .sidebar { background: var(--bg1); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
 .sidebar-hdr {
   padding: 16px 18px 10px; font-family: var(--mono); font-size: 9px; font-weight: 600;
@@ -125,11 +116,21 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 
 .step-lbl {
   font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
-  color: var(--text); display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
+  color: var(--text); display: flex; align-items: center; gap: 6px; margin-bottom: 3px; flex-wrap: wrap;
 }
 .retry-badge {
   background: rgba(240,168,48,0.15); color: var(--gold);
   border: 1px solid rgba(240,168,48,0.3); border-radius: 3px; font-size: 8px; padding: 1px 5px;
+}
+.llm-badge {
+  background: rgba(0,229,176,0.12); color: var(--accent);
+  border: 1px solid rgba(0,229,176,0.25); border-radius: 3px;
+  font-size: 8px; padding: 1px 5px; font-family: var(--mono); letter-spacing: 0.05em;
+}
+.heuristic-badge {
+  background: rgba(122,132,153,0.1); color: var(--text3);
+  border: 1px solid rgba(122,132,153,0.2); border-radius: 3px;
+  font-size: 8px; padding: 1px 5px; font-family: var(--mono); letter-spacing: 0.05em;
 }
 .step-dtl { font-size: 10px; color: var(--text3); font-family: var(--mono); line-height: 1.5; }
 
@@ -139,8 +140,12 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .conf-val { font-size: 14px; font-weight: 700; color: var(--accent); font-family: var(--mono); }
 .conf-track { height: 3px; background: var(--border2); border-radius: 99px; overflow: hidden; }
 .conf-fill { height: 100%; background: var(--accent); border-radius: 99px; transition: width 0.9s cubic-bezier(0.4,0,0.2,1); }
+.conf-meta { margin-top: 8px; font-size: 9px; color: var(--text3); font-family: var(--mono); line-height: 1.7; }
+.conf-meta-row { display: flex; justify-content: space-between; align-items: center; }
+.conf-meta-val { color: var(--text2); }
+.llm-agents-row { margin-top: 5px; font-size: 9px; color: var(--text3); font-family: var(--mono); line-height: 1.6; }
+.llm-agents-row span { color: var(--accent); }
 
-/* ── RIGHT PANEL ── */
 .right-panel { display: flex; flex-direction: column; overflow: hidden; }
 
 .empty-state {
@@ -151,7 +156,6 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .empty-state h2 { font-size: 14px; color: var(--text2); font-weight: 500; }
 .empty-state p  { font-size: 11px; line-height: 1.7; text-align: center; max-width: 260px; }
 
-/* ── RESULTS ── */
 .results { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 
 .results-hdr {
@@ -184,7 +188,6 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 
 .companies-list { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
 
-/* ── COMPANY CARD ── */
 .co-card {
   background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius2);
   padding: 18px 18px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
@@ -214,11 +217,10 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .signals { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px; }
 .sig { font-size: 10px; padding: 2px 8px; border-radius: 4px; font-family: var(--mono); background: rgba(10,180,232,0.08); color: var(--accent2); border: 1px solid rgba(10,180,232,0.18); }
 
-.insight { font-size: 12px; color: var(--text2); line-height: 1.6; display: flex; gap: 7px; align-items: flex-start; font-style: italic; margin-bottom: 6px;}
+.insight { font-size: 12px; color: var(--text2); line-height: 1.6; display: flex; gap: 7px; align-items: flex-start; font-style: italic; margin-bottom: 6px; }
 .ia { color: var(--accent); flex-shrink: 0; font-style: normal; }
 .why { font-size: 10px; color: var(--text3); font-family: var(--mono); line-height: 1.5; margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border); }
 
-/* ── DETAIL PANEL ── */
 .detail-panel { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
 .dsec { background: var(--bg1); border: 1px solid var(--border); border-radius: var(--radius2); overflow: hidden; }
 .dsec-hdr {
@@ -254,13 +256,21 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .fetching::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); animation: pulse 1.2s ease-in-out infinite; flex-shrink: 0; }
 `;
 
-/* ─── TYPES ── */
-type AgentStep = { step: string; status: "running"|"done"|"error"|"retry"; detail: string; ts: number; };
+/* TYPES */
+type AgentStep = {
+  step: string;
+  status: "running" | "done" | "error" | "retry";
+  detail: string;
+  ts: number;
+  source?: string;
+};
+
 type Company = {
   company: string; industry: string; region: string; employees: number;
   funding: string; icp_score: number; confidence: number;
   signals: string[]; insight: string; why_this_result?: string;
 };
+
 type GTMResult = {
   plan: Record<string, unknown>;
   results: Company[];
@@ -269,15 +279,18 @@ type GTMResult = {
   reasoning_trace: string[];
   errors: string[];
   retry_count: number;
-  gtm_strategy?: Record<string, Record<string, unknown>>;
+  gtm_strategy?: Record<string, unknown>;
   spans?: Array<{ event: string }>;
+  total_latency_s?: number;
+  llm_agents?: string[];
 };
 
-/* ─── CONSTANTS ── */
+/* CONSTANTS */
 const STEP_LABELS: Record<string, string> = {
   planner: "PLANNER", retrieval: "RETRIEVAL",
   enrichment: "ENRICHMENT", critic: "CRITIC", gtm_strategy: "GTM STRATEGY",
 };
+
 const SUGGESTIONS = [
   "Find high-growth AI SaaS companies in the US",
   "Identify fintech startups hiring aggressively",
@@ -292,24 +305,19 @@ function icpLabel(s: number) {
   return `${s >= 0.7 ? "High ICP" : s >= 0.4 ? "Mid ICP" : "Low ICP"} · ${s.toFixed(2)}`;
 }
 
-/* ─── COMPANY CARD ── */
+/* COMPANY CARD */
 function CompanyCard({ c, selected, onClick }: { c: Company; selected: boolean; onClick: () => void }) {
   return (
     <div className={`co-card ${selected ? "sel" : ""}`} onClick={onClick}>
-      
       <div className="card-top">
         <div className="co-name">{c.company}</div>
-        <div className={`icp-badge ${icpClass(c.icp_score)}`}>
-          {icpLabel(c.icp_score)}
-        </div>
+        <div className={`icp-badge ${icpClass(c.icp_score)}`}>{icpLabel(c.icp_score)}</div>
       </div>
-
       <div className="card-meta">
-        {[["Industry", c.industry],
-          ["Region", c.region],
-          ["Employees", c.employees.toLocaleString()],
-          ["Funding", c.funding],
-          ["Confidence", `${Math.round(c.confidence * 100)}%`]
+        {[["Industry", c.industry], ["Region", c.region],
+          ["Employees", c.employees?.toLocaleString() ?? "—"],
+          ["Funding", c.funding ?? "—"],
+          ["Confidence", `${Math.round((c.confidence ?? 0) * 100)}%`]
         ].map(([k, v]) => (
           <div key={k} className="mpill">
             <span className="mkey">{k}</span>
@@ -317,50 +325,37 @@ function CompanyCard({ c, selected, onClick }: { c: Company; selected: boolean; 
           </div>
         ))}
       </div>
-
-      {c.signals.length > 0 && (
+      {c.signals?.length > 0 && (
         <div className="signals">
           {c.signals.map(s => (
             <span key={s} className="sig">{s.replace(/_/g, " ")}</span>
           ))}
         </div>
       )}
-
-      {/* SINGLE insight + spacing */}
       <div style={{ marginTop: "6px" }}>
         <div className="insight">
           <span className="ia">↳</span>
           <span>{c.insight}</span>
         </div>
-
         {c.why_this_result && (
-          <div className="why">
-            Why: {c.why_this_result}
-          </div>
+          <div className="why">Why: {c.why_this_result}</div>
         )}
       </div>
-
     </div>
   );
 }
 
-/* ─── DETAIL PANEL ── */
+/* DETAIL PANEL */
 function DetailPanel({ company, result }: { company: Company | null; result: GTMResult }) {
-  const [tab, setTab] = useState<"email"|"personas"|"competitive"|"trace">("email");
-  const cs = company ? result.gtm_strategy?.[company.company] : undefined;
+  const [tab, setTab] = useState<"email" | "personas" | "competitive" | "trace">("email");
 
-  // Pull per-company GTM data from gtm_strategy arrays
   const emailEntry = result.gtm_strategy?.email_snippets as Array<{ company: string; email: string }> | undefined;
   const personaEntry = result.gtm_strategy?.persona_targeting as Array<{ company: string; personas: Record<string, unknown> }> | undefined;
   const compEntry = result.gtm_strategy?.competitive_intelligence as Array<{ company: string; competitive: Record<string, string> }> | undefined;
 
-  const email = company
-    ? emailEntry?.find(e => e.company === company.company)?.email
-    : undefined;
+  const email = company ? emailEntry?.find(e => e.company === company.company)?.email : undefined;
 
-  const personasRaw = company
-    ? personaEntry?.find(p => p.company === company.company)?.personas
-    : undefined;
+  const personasRaw = company ? personaEntry?.find(p => p.company === company.company)?.personas : undefined;
   const personasArr = personasRaw
     ? Object.values(personasRaw).map((p: unknown) => {
         const persona = p as Record<string, string>;
@@ -368,9 +363,7 @@ function DetailPanel({ company, result }: { company: Company | null; result: GTM
       })
     : undefined;
 
-  const compRaw = company
-    ? compEntry?.find(c => c.company === company.company)?.competitive
-    : undefined;
+  const compRaw = company ? compEntry?.find(c => c.company === company.company)?.competitive : undefined;
   const compArr = compRaw?.likely_stack
     ? compRaw.likely_stack.split(",").map((name: string, i: number) => ({
         name: name.trim(), score: Math.max(0.3, 0.85 - i * 0.12),
@@ -378,7 +371,7 @@ function DetailPanel({ company, result }: { company: Company | null; result: GTM
     : undefined;
 
   const defaultEmail = company
-    ? `Hi,\n\nNoticed that ${company.company} is ${company.signals[0]?.replace(/_/g, " ") ?? "scaling rapidly"} — a strong signal.\n\nFor teams at this stage, we typically see the biggest wins by focusing on outbound efficiency and pipeline velocity.\n\nWe've helped similar companies hit their goals faster. Open to a 15-min call?\n\nBest`
+    ? `Hi,\n\nNoticed that ${company.company} is ${company.signals?.[0]?.replace(/_/g, " ") ?? "scaling rapidly"} — a strong signal.\n\nFor teams at this stage, we typically see the biggest wins by focusing on outbound efficiency and pipeline velocity.\n\nWe've helped similar companies hit their goals faster. Open to a 15-min call?\n\nBest`
     : "";
 
   const defaultPersonas = [
@@ -398,8 +391,10 @@ function DetailPanel({ company, result }: { company: Company | null; result: GTM
         <div className="dsec">
           <div className="dsec-hdr"><div className="ddot" />{company.company} — GTM Intelligence</div>
           <div className="dtabs">
-            {(["email","personas","competitive","trace"] as const).map(t => (
-              <button key={t} className={`tab ${tab===t?"active":""}`} onClick={() => setTab(t)}>{t.toUpperCase()}</button>
+            {(["email", "personas", "competitive", "trace"] as const).map(t => (
+              <button key={t} className={`tab ${tab === t ? "active" : ""}`} onClick={() => setTab(t)}>
+                {t.toUpperCase()}
+              </button>
             ))}
           </div>
           {tab === "email" && <div className="email-body">{email ?? defaultEmail}</div>}
@@ -418,8 +413,10 @@ function DetailPanel({ company, result }: { company: Company | null; result: GTM
               {(compArr ?? defaultCompetitive).map((c, i) => (
                 <div key={i} className="comp-row">
                   <div className="comp-name">{c.name}</div>
-                  <div className="comp-bar-wrap"><div className="comp-bar" style={{ width: `${Math.round(c.score*100)}%` }} /></div>
-                  <div className="comp-score">{Math.round(c.score*100)}%</div>
+                  <div className="comp-bar-wrap">
+                    <div className="comp-bar" style={{ width: `${Math.round(c.score * 100)}%` }} />
+                  </div>
+                  <div className="comp-score">{Math.round(c.score * 100)}%</div>
                 </div>
               ))}
             </div>
@@ -443,11 +440,13 @@ function DetailPanel({ company, result }: { company: Company | null; result: GTM
           </div>
         </div>
       )}
-      {result.errors.length > 0 && (
+      {result.errors?.length > 0 && (
         <div className="dsec">
           <div className="dsec-hdr"><div className="ddot" style={{ background: "var(--danger)" }} />Errors</div>
           <div className="error-list">
-            {result.errors.map((e, i) => <div key={i} className="err-item"><span>!</span><span>{e}</span></div>)}
+            {result.errors.map((e, i) => (
+              <div key={i} className="err-item"><span>!</span><span>{e}</span></div>
+            ))}
           </div>
         </div>
       )}
@@ -455,22 +454,22 @@ function DetailPanel({ company, result }: { company: Company | null; result: GTM
   );
 }
 
-/* ── MAIN APP ── */
+/* MAIN APP */
 export default function App() {
   const [query, setQuery]       = useState("");
   const [result, setResult]     = useState<GTMResult | null>(null);
   const [steps, setSteps]       = useState<AgentStep[]>([]);
   const [running, setRunning]   = useState(false);
-  const [view, setView]         = useState<"companies"|"detail">("companies");
+  const [view, setView]         = useState<"companies" | "detail">("companies");
   const [selected, setSelected] = useState<Company | null>(null);
-  const [sort, setSort]         = useState<"icp"|"employees"|"confidence">("icp");
+  const [sort, setSort]         = useState<"icp" | "employees" | "confidence">("icp");
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
     const el = document.createElement("style");
-    el.id = "gtm-styles-v4";
+    el.id = "gtm-styles-v5";
     el.textContent = CSS;
-    if (!document.getElementById("gtm-styles-v4")) document.head.appendChild(el);
+    if (!document.getElementById("gtm-styles-v5")) document.head.appendChild(el);
     return () => el.remove();
   }, []);
 
@@ -484,7 +483,6 @@ export default function App() {
     setView("companies");
     setRunning(true);
 
-    // #2: WebSocket for real streaming step updates
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
 
@@ -493,16 +491,15 @@ export default function App() {
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data);
 
-      // #: stream each agent step live as it arrives
       if (msg.type === "agent_update") {
         const step: AgentStep = {
-          step: msg.step,
+          step:   msg.step,
           status: msg.status,
           detail: msg.detail,
-          ts: Date.now(),
+          ts:     Date.now(),
+          source: msg.data?.source,
         };
         setSteps(prev => {
-          // replace existing entry for same step+status=running, or append
           const idx = prev.findIndex(s => s.step === msg.step && s.status === "running");
           if (idx >= 0) {
             const updated = [...prev];
@@ -513,7 +510,6 @@ export default function App() {
         });
       }
 
-      // Final result
       if (msg.type === "result") {
         setResult(msg.data);
         ws.close();
@@ -530,13 +526,14 @@ export default function App() {
     ws.onclose = () => setRunning(false);
   }, [query, running]);
 
-  const sorted = result?.results ? [...result.results].sort((a, b) =>
-    sort === "icp" ? b.icp_score - a.icp_score :
-    sort === "employees" ? b.employees - a.employees :
-    b.confidence - a.confidence
-  ) : [];
+  const sorted = result?.results
+    ? [...result.results].sort((a, b) =>
+        sort === "icp"       ? b.icp_score - a.icp_score :
+        sort === "employees" ? (b.employees ?? 0) - (a.employees ?? 0) :
+        b.confidence - a.confidence
+      )
+    : [];
 
-  //  show retry count from result
   const retryCount = result?.retry_count ?? 0;
 
   return (
@@ -571,7 +568,7 @@ export default function App() {
         </div>
       </div>
 
-      {/*  retry banner — shown when pipeline had to retry */}
+      {/* RETRY BANNER */}
       {result && retryCount > 0 && (
         <div className="retry-banner">
           <div className="retry-banner-dot" />
@@ -594,8 +591,13 @@ export default function App() {
                   <div>
                     <div className="step-lbl">
                       {STEP_LABELS[s.step] ?? s.step.toUpperCase()}
-                      {/*  retry badge on critic step */}
                       {s.status === "retry" && <span className="retry-badge">RETRY</span>}
+                      {s.source && s.source !== "heuristic" && s.status !== "running" && (
+                        <span className="llm-badge">LLM</span>
+                      )}
+                      {s.source === "heuristic" && s.status !== "running" && (
+                        <span className="heuristic-badge">HEURISTIC</span>
+                      )}
                     </div>
                     <div className="step-dtl">{s.detail}</div>
                   </div>
@@ -612,20 +614,41 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {/* CONFIDENCE + METADATA */}
           {(result?.confidence ?? 0) > 0 && (
             <div className="conf-section">
               <div className="conf-row">
-                <span className="conf-lbl">Confidence</span>
+                <span className="conf-lbl">CONFIDENCE</span>
                 <span className="conf-val">{Math.round((result?.confidence ?? 0) * 100)}%</span>
               </div>
               <div className="conf-track">
                 <div className="conf-fill" style={{ width: `${(result?.confidence ?? 0) * 100}%` }} />
               </div>
+              <div className="conf-meta">
+                {result?.total_latency_s && (
+                  <div className="conf-meta-row">
+                    <span>Latency</span>
+                    <span className="conf-meta-val">{result.total_latency_s}s</span>
+                  </div>
+                )}
+                {retryCount > 0 && (
+                  <div className="conf-meta-row">
+                    <span>Retries</span>
+                    <span className="conf-meta-val">{retryCount}</span>
+                  </div>
+                )}
+                {(result?.llm_agents?.length ?? 0) > 0 && (
+                  <div className="llm-agents-row">
+                    LLM agents: <span>{result?.llm_agents?.join(", ")}</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
 
-        {/* RIGHT */}
+        {/* RIGHT PANEL */}
         <div className="right-panel">
           {!result && !running && (
             <div className="empty-state">
@@ -639,9 +662,11 @@ export default function App() {
             <div className="results">
               <div className="results-hdr">
                 <div className="tabs">
-                  <button className={`tab ${view==="companies"?"active":""}`} onClick={() => setView("companies")}>COMPANIES</button>
+                  <button className={`tab ${view === "companies" ? "active" : ""}`} onClick={() => setView("companies")}>
+                    COMPANIES
+                  </button>
                   {selected && (
-                    <button className={`tab ${view==="detail"?"active":""}`} onClick={() => setView("detail")}>
+                    <button className={`tab ${view === "detail" ? "active" : ""}`} onClick={() => setView("detail")}>
                       {selected.company.toUpperCase()}
                     </button>
                   )}
@@ -658,52 +683,41 @@ export default function App() {
                 <>
                   <div className="sort-bar">
                     <span className="sort-lbl">SORT BY</span>
-                    {(["icp","employees","confidence"] as const).map(s => (
-                      <button key={s} className={`sort-btn ${sort===s?"active":""}`} onClick={() => setSort(s)}>
+                    {(["icp", "employees", "confidence"] as const).map(s => (
+                      <button key={s} className={`sort-btn ${sort === s ? "active" : ""}`} onClick={() => setSort(s)}>
                         {s === "icp" ? "ICP Score" : s === "employees" ? "Employees" : "Confidence"}
                       </button>
                     ))}
                   </div>
                   <div className="companies-list">
+                    {sorted.map((c, i) => (
+                      <div key={i}>
+                        <CompanyCard
+                          c={c}
+                          selected={selected?.company === c.company}
+                          onClick={() => { setSelected(c); setView("detail"); }}
+                        />
+                        <div style={{ marginTop: "-4px", marginBottom: "10px", paddingLeft: "12px" }}>
+                          <span style={{ color: "var(--text3)", fontSize: "12px", fontStyle: "italic" }}>
+                            ↳ {c.insight?.slice(0, 90)}{(c.insight?.length ?? 0) > 90 ? "..." : ""}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    {running && sorted.length === 0 && (
+                      <div className="fetching">Fetching results…</div>
+                    )}
+                  </div>
+                </>
+              )}
 
-                   {sorted.map((c, i) => (
-                    <div key={i}>
-                     <CompanyCard
-                       c={c}
-                       selected={selected?.company === c.company}
-                       onClick={() => {
-                        setSelected(c);
-                        setView("detail");
-                      }}
-                     />
-
-                     {/* preview insight */}
-                     <div style={{ marginTop: "-4px", marginBottom: "10px", paddingLeft: "12px" }}>
-                       <span style={{ color: "var(--text3)", fontSize: "12px", fontStyle: "italic" }}>
-                         ↳ {c.insight?.slice(0, 90)}
-                         {c.insight?.length > 90 ? "..." : ""}
-                       </span>
-                     </div>
-                   </div>
-                  ))}
-
-                 {running && sorted.length === 0 && (
-                  <div className="fetching">Fetching results…</div>
-                )}
-
-               </div>  {/* */}
-              </>
-             )} {/* */}
-
-             {/* Detail View */}
-             {view === "detail" && result && (
-              <DetailPanel company={selected} result={result} />
-             )}
-
+              {view === "detail" && result && (
+                <DetailPanel company={selected} result={result} />
+              )}
             </div>
-          )} 
-        </div> 
-      </div> 
-    </div> 
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

@@ -60,7 +60,7 @@ pipeline complete — confidence: 0.87, retries: 0
 
 The system is orchestrated as an iterative multi-agent pipeline with a critic-driven feedback loop, enabling self-correction and improved output quality over multiple passes.
 
-![GTM Intelligence architecture](./docs/architecture.svg)
+![GTM Intelligence architecture](./docs/architecture.png)
 
 All agents share a central `AgentState` object. The Critic evaluates enriched results and returns a structured verdict. On `RETRY`, it feeds specific, machine-readable feedback back to the Planner — which adjusts its plan and re-runs the full pipeline. This loop runs up to 3 times, preserving the full reasoning trace across every attempt.
 

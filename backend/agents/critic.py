@@ -51,7 +51,7 @@ class CriticAgent:
     """
     Validates enriched results and decides: PASS | RETRY | FAIL
 
-    Primary path: Groq LLM judge (llama-3.3-70b-versatile)
+    Primary path: Groq LLM judge (llama-3.1-70b-versatile)
     Fallback: original heuristic checks if Groq is unavailable
     """
 
@@ -71,7 +71,7 @@ class CriticAgent:
         except ImportError:
             logger.warning("critic: groq package not installed — will use heuristic fallback")
 
-    # ── Main entry point 
+    # ── Main entry point ──────────────────────────────────────────────
 
     def __call__(self, state: AgentState) -> AgentState:
         logger.info("critic started")
@@ -143,14 +143,13 @@ Evaluate these results and return your verdict as JSON."""
 
         try:
             response = self._groq_client.chat.completions.create(
-                model="llama-3.3-70b-versatile",
+                model="llama-3.1-70b-versatile",
                 messages=[
                     {"role": "system", "content": CRITIC_SYSTEM_PROMPT},
                     {"role": "user",   "content": user_message},
                 ],
                 temperature=0.1,
                 max_tokens=400,
-                response_format={"type": "json_object"},
             )
 
             latency   = round(time.time() - t0, 2)
@@ -164,7 +163,7 @@ Evaluate these results and return your verdict as JSON."""
 
             # Store metrics in state memory
             state.memory.setdefault("metrics", {})["critic"] = {
-                "source":      "groq/llama-3.3-70b-versatile",
+                "source":      "groq/llama-3.1-70b-versatile",
                 "latency_s":   latency,
                 "tokens_in":   usage.prompt_tokens,
                 "tokens_out":  usage.completion_tokens,
@@ -172,7 +171,7 @@ Evaluate these results and return your verdict as JSON."""
 
             parsed = self._parse_llm_response(raw_text)
             if parsed is None:
-                logger.warning(f"planner RAW LLM output:\n{raw_text}")
+                logger.warning("critic: LLM response unparseable — falling back to heuristics")
                 return self._heuristic_judge(state)
 
             return self._apply_verdict(state, parsed)
@@ -366,13 +365,38 @@ Evaluate these results and return your verdict as JSON."""
         return ""
 
     def _is_relevant(self, query: str, data: List[Dict]) -> bool:
+        # Strip generic words that are never in record fields
+        GENERIC = {
+            "high", "growth", "high-growth", "fast", "top", "best", "leading",
+            "companies", "company", "startups", "startup", "find", "show", "get",
+            "identify", "scale", "scaling",
+        }
         keywords = [
-            w for w in query.lower().split()
-            if len(w) > 3 and w not in STOP_WORDS
+            w.strip("-")
+            for w in query.lower().split()
+            if len(w) > 3 and w not in STOP_WORDS and w.strip("-") not in GENERIC
         ]
+
+        # If nothing meaningful remains after filtering, pass by default
+        if not keywords:
+            return True
+
         for record in data:
-            text = str(record).lower()
-            if sum(1 for kw in keywords if kw in text) >= 2:
+            # Check against industry, region, signals — not just raw string dump
+            record_terms = set()
+            record_terms.add(record.get("industry", "").lower())
+            record_terms.add(record.get("region", "").lower())
+            record_terms.update(s.lower() for s in record.get("signals", []))
+            record_terms.update(t.lower() for t in record.get("tech_stack", []))
+
+            full_text = str(record).lower()
+            record_terms.add(full_text)
+
+            matched = sum(
+                1 for kw in keywords
+                if any(kw in term for term in record_terms)
+            )
+            if matched >= max(1, len(keywords) // 2):
                 return True
         return False
 
