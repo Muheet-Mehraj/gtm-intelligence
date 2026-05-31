@@ -328,6 +328,3 @@ Every pipeline run produces a complete audit trail:
 * `confidence` — final pipeline confidence score (0.0–1.0)
 
 ```
----
-
-```
