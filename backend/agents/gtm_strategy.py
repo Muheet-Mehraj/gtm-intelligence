@@ -129,7 +129,7 @@ class GTMStrategyAgent:
                 "llm_companies":      llm_count,
                 "template_companies": template_count,
                 "total_latency_s":    round(total_latency, 2),
-                "source": "groq/llama-3.1-70b-versatile" if llm_count > 0 else "template",
+                "source": "groq/llama-3.3-70b-versatile" if llm_count > 0 else "template",
             }
 
             source_note = (
@@ -188,7 +188,7 @@ Return the JSON strategy object."""
 
         try:
             response = self._groq_client.chat.completions.create(
-                model="llama-3.1-70b-versatile",
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": "system", "content": GTM_SYSTEM_PROMPT},
                     {"role": "user",   "content": user_message},

@@ -218,7 +218,7 @@ class PlannerAgent:
         t0 = time.time()
         try:
             response = self._groq_client.chat.completions.create(
-                model="llama-3.1-70b-versatile",
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": "system", "content": PLANNER_SYSTEM_PROMPT},
                     {"role": "user",   "content": f'Query: "{query}"'},
@@ -254,12 +254,12 @@ class PlannerAgent:
                 "search_looseness":  parsed.get("search_looseness", "strict"),
                 "confidence":        parsed.get("confidence", 0.75),
                 "critic_feedback_applied": None,
-                "source": "groq/llama-3.1-70b-versatile",
+                "source": "groq/llama-3.3-70b-versatile",
             }
 
             # Store metrics
             state_metrics = {
-                "source":    "groq/llama-3.1-70b-versatile",
+                "source":    "groq/llama-3.3-70b-versatile",
                 "latency_s": latency,
                 "tokens_in": usage.prompt_tokens,
                 "tokens_out": usage.completion_tokens,

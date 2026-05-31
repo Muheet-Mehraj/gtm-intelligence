@@ -298,7 +298,7 @@ const SUGGESTIONS = [
   "Enterprise health tech companies scaling in Europe",
 ];
 
-const WS_URL = "ws://localhost:8000/ws/run";
+const WS_URL = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/ws/run`;
 
 function icpClass(s: number) { return s >= 0.7 ? "icp-high" : s >= 0.4 ? "icp-mid" : "icp-low"; }
 function icpLabel(s: number) {

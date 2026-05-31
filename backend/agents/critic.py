@@ -143,7 +143,7 @@ Evaluate these results and return your verdict as JSON."""
 
         try:
             response = self._groq_client.chat.completions.create(
-                model="llama-3.1-70b-versatile",
+                model="llama-3.3-70b-versatile",
                 messages=[
                     {"role": "system", "content": CRITIC_SYSTEM_PROMPT},
                     {"role": "user",   "content": user_message},
@@ -163,7 +163,7 @@ Evaluate these results and return your verdict as JSON."""
 
             # Store metrics in state memory
             state.memory.setdefault("metrics", {})["critic"] = {
-                "source":      "groq/llama-3.1-70b-versatile",
+                "source":      "groq/llama-3.3-70b-versatile",
                 "latency_s":   latency,
                 "tokens_in":   usage.prompt_tokens,
                 "tokens_out":  usage.completion_tokens,
