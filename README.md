@@ -6,13 +6,12 @@
 
 ## 🌐 Live Demo
 
-| | |
+| Component | Production URL |
 |---|---|
-| Frontend | https://gtm-intelligence-taupe.vercel.app/ |
-| Backend API | https://gtm-intelligence.onrender.com |
-| WebSocket | wss://gtm-intelligence.onrender.com/ws/run |
+| **Web UI & Backend API** | https://gtm-intelligence.onrender.com |
+| **WebSocket Stream** | wss://gtm-intelligence.onrender.com/ws/run |
 
-> ⚠️ **Cold start:** The backend is hosted on Render's free tier and may take **30–50 seconds to wake up** on first load. If the frontend shows no response initially, wait a moment and try again.
+> ⚠️ **Cold start:** The application is hosted on Render's free tier as a unified service. The container may take **30–50 seconds to wake up** on the first request. If the webpage or streaming socket connection times out initially, please refresh after a few moments.
 
 ---  
 
@@ -31,9 +30,11 @@ The result is a pipeline that behaves less like a prompt chain and more like a j
 **Input**
 ```json
 { "query": "Find AI companies hiring aggressively" }
+
 ```
 
 **Output (single result)**
+
 ```json
 {
   "company": "ScaleAI",
@@ -45,27 +46,24 @@ The result is a pipeline that behaves less like a prompt chain and more like a j
   "why_this_result": "Series E + rapid SDR hiring + high outbound intent",
   "recommended_angle": "Help scale outbound efficiency before headcount growth outpaces pipeline"
 }
+
 ```
 
 **Reasoning trace**
+
 ```
 planner: strategy=signal_driven, industry=AI, region=global
 retrieval: 8 candidate accounts found
 enrichment: ranked 8 records — top: ScaleAI (1.00) → bottom: DataRobot (0.74)
 critic: PASS — relevance OK, signals present, no hallucinations
 pipeline complete — confidence: 0.87, retries: 0
+
 ```
 
 ---
 
 ## Architecture
-
-The system is orchestrated as an iterative multi-agent pipeline with a critic-driven feedback loop, enabling self-correction and improved output quality over multiple passes.
-
-![GTM Intelligence architecture](./docs/architecture.png)
-
-All agents share a central `AgentState` object. The Critic evaluates enriched results and returns a structured verdict. On `RETRY`, it feeds specific, machine-readable feedback back to the Planner — which adjusts its plan and re-runs the full pipeline. This loop runs up to 3 times, preserving the full reasoning trace across every attempt.
-
+![GTM Intelligence Architecture](./docs/architecture.png)
 ---
 
 ## MCP Integration
@@ -73,7 +71,7 @@ All agents share a central `AgentState` object. The Critic evaluates enriched re
 The retrieval agent connects to real data sources via the **Model Context Protocol (MCP)**:
 
 | MCP Server | What it does |
-|---|---|
+| --- | --- |
 | Gmail MCP | Searches inbox for emails mentioning target companies or industry keywords — extracts buying signals, hiring mentions, and funding references |
 | Google Drive MCP | Scans documents (CRM exports, prospect lists, research docs, meeting notes) for company intel and sales targets |
 
@@ -84,6 +82,7 @@ MCP failures are isolated — if Gmail or Drive is unavailable, the pipeline con
 ```
 tools/mcp_retrieval.py   ← MCP tool (Gmail + Drive)
 agents/retrieval.py      ← merges MCP results with mock data
+
 ```
 
 ---
@@ -114,48 +113,58 @@ Unlimited retries would mask bad queries and inflate latency. Three cycles is en
 
 Vague or incomplete queries are a real input condition, not an edge case. The system handles them through three mechanisms:
 
-- **Soft matching in retrieval** — when strict filters return too few candidates, the retrieval layer expands to broader keyword and region matching before falling back to a diverse sample
-- **Filter relaxation on retry** — if the Critic rejects results as too narrow or misaligned, the Planner can widen region scope, relax industry constraints, or shift entity type on the next pass
-- **Confidence signalling** — every pipeline run produces a `confidence` score (0.0–1.0) so downstream consumers know how much to trust the output
+* **Soft matching in retrieval** — when strict filters return too few candidates, the retrieval layer expands to broader keyword and region matching before falling back to a diverse sample
+* **Filter relaxation on retry** — if the Critic rejects results as too narrow or misaligned, the Planner can widen region scope, relax industry constraints, or shift entity type on the next pass
+* **Confidence signalling** — every pipeline run produces a `confidence` score (0.0–1.0) so downstream consumers know how much to trust the output
 
 ---
 
 ## Key Features
 
 ### Multi-Agent Orchestration
+
 Five specialized agents with clear separation of concerns:
-- **Planner** — converts natural language query into a structured execution plan (`entity_type`, `filters`, `tasks`, `strategy`, `confidence`)
-- **Retrieval** — fetches and scores candidate companies using industry + region + keyword matching with soft fallback; merges real signals from Gmail + Drive via MCP
-- **Enrichment** — computes ICP scores, buying signals, insights, and `why_this_result` explanations per account
-- **Critic** — validates results for relevance, hallucinations, region/industry mismatch, quality, and signal presence; generates structured feedback for replanning
-- **GTM Strategy** — generates personalized email hooks, multi-persona messaging, and competitive positioning
+
+* **Planner** — converts natural language query into a structured execution plan (`entity_type`, `filters`, `tasks`, `strategy`, `confidence`)
+* **Retrieval** — fetches and scores candidate companies using industry + region + keyword matching with soft fallback; merges real signals from Gmail + Drive via MCP
+* **Enrichment** — computes ICP scores, buying signals, insights, and `why_this_result` explanations per account
+* **Critic** — validates results for relevance, hallucinations, region/industry mismatch, quality, and signal presence; generates structured feedback for replanning
+* **GTM Strategy** — generates personalized email hooks, multi-persona messaging, and competitive positioning
 
 ### Critic Feedback Loop
+
 The Critic is not just a validator — it is a feedback engine. It returns `PASS | RETRY | FAIL` with a structured reason. On `RETRY`, that reason is stored in `state.memory["critic_feedback"]` and passed directly to the Planner, which uses it to adjust region, industry, or search scope before re-running the full pipeline. The full reasoning trace is preserved across all retry cycles, giving complete visibility into how the system corrected itself.
 
 ### Memory System
-- **SessionMemory** — TTL-based exact query cache (5 min). Repeat queries return instantly without re-running the pipeline.
-- **VectorStore** — keyword-similarity store of past query→result pairs. Similar future queries are augmented with relevant past records and signals, improving retrieval quality over time.
+
+* **SessionMemory** — TTL-based exact query cache (5 min). Repeat queries return instantly without re-running the pipeline.
+* **VectorStore** — keyword-similarity store of past query→result pairs. Similar future queries are augmented with relevant past records and signals, improving retrieval quality over time.
 
 ### ICP Scoring Engine
+
 Multi-factor scoring in `enrichment.py`:
-- Signal weights (`growth_funding`, `hiring_aggressively`, `mid_market_growth`, etc.)
-- Employee band scoring
-- Funding stage scoring
-- Apollo intent score boost
-- Explorium GTM fit boost
-- Churn risk adjustment
+
+* Signal weights (`growth_funding`, `mid_market_growth`, `enterprise_scale`, `early_stage_team`, `hiring_aggressively`, `churn_risk`, `late_stage`)
+* Employee band scoring
+* Funding stage scoring
+* Apollo intent score boost
+* Explorium GTM fit boost
+* Churn risk adjustment
 
 ### Buying Signal Detection
+
 Signals detected per company: `growth_funding`, `mid_market_growth`, `enterprise_scale`, `early_stage_team`, `hiring_aggressively`, `churn_risk`, `late_stage`.
 
 ### Multi-Persona Targeting
+
 GTM Strategy agent generates tailored messaging for VP Sales, CEO, and CTO — each with persona-specific pain points, value props, hooks, and CTAs.
 
 ### Competitive Intelligence
+
 Per-company competitive stack inference and positioning strategy based on industry and detected signals.
 
 ### Real-time Streaming via WebSocket
+
 The frontend connects to `/ws/run` and receives live `agent_update` events as each pipeline step completes — showing agent status, retry indicators, and confidence updates in real time.
 
 ---
@@ -165,7 +174,7 @@ The frontend connects to `/ws/run` and receives live `agent_update` events as ea
 The system is designed to degrade gracefully under real-world conditions — partial data, API failures, and over-constrained queries are all handled explicitly rather than crashing the run.
 
 | Failure Mode | Response |
-|---|---|
+| --- | --- |
 | Empty retrieval | Soft fallback → industry/region soft match → diverse sample |
 | MCP unavailable | Log and skip — pipeline continues with mock data |
 | Critic RETRY | Planner re-plans with structured feedback; up to 3 attempts |
@@ -179,8 +188,8 @@ The system is designed to degrade gracefully under real-world conditions — par
 ## Tech Stack
 
 | Layer | Technology |
-|---|---|
-| Backend | FastAPI + Python |
+| --- | --- |
+| Backend & Server | FastAPI + Python + Uvicorn |
 | WebSocket | FastAPI WebSocket |
 | Rate Limiting | slowapi |
 | MCP Integration | Anthropic MCP client — Gmail + Google Drive |
@@ -212,7 +221,7 @@ backend/
 │   ├── apollo.py         # Apollo mock
 │   └── scoring.py        # ICP scoring engine
 ├── api/
-│   ├── main.py           # FastAPI app + WebSocket route
+│   ├── main.py           # FastAPI app (Mounts static frontend/dist + WebSocket route)
 │   ├── routes.py         # POST /run
 │   └── websocket.py      # streaming agent updates
 └── observability/
@@ -220,8 +229,10 @@ backend/
     └── tracer.py
 
 frontend/
-└── src/
-    └── App.tsx           # React UI with agent timeline
+├── src/
+│   └── App.tsx           # React UI with agent timeline
+└── vite.config.js        # Bundled configuration with local proxy loopback
+
 ```
 
 ---
@@ -229,56 +240,79 @@ frontend/
 ## Running Locally
 
 ```bash
-# Backend (run from project root)
-source venv/Scripts/activate        # Windows
+# 1. Start Backend Server (run from project root)
+source venv/Scripts/activate        # Windows venv activation
 python -m uvicorn backend.api.main:app --reload --port 8000
 
-# Frontend
+# 2. Launch Development Frontend (Separate terminal)
 cd frontend
 npm install
 npm run dev
+
 ```
 
-Backend runs on `http://localhost:8000`  
-Frontend runs on `http://localhost:5173`
+* Backend / API routes handle connections on `http://localhost:8000`
+* Frontend dev server runs on `http://localhost:5173` (Proxies `/ws` entries locally to port 8000)
 
 ---
 
 ## Deployment
 
-| Service | Platform |
-|---|---|
-| Frontend | Vercel |
-| Backend + WebSocket | Render |
+### Render Configuration (Single Web Service)
+
+The production infrastructure is packaged inside a single web service instance to prevent multi-domain CORS complications and eliminate separate platform dependencies.
+
+* **Platform:** Render (Web Service)
+* **Environment / Runtime:** Python 3
+* **Root Directory:** *(Leave Blank / Repo Root)*
+* **Build Command:**
+```bash
+cd frontend && npm install && npm run build && cd .. && pip install -r backend/requirements.txt
+
+```
+
+
+* **Start Command:**
+```bash
+python -m uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
+
+```
+
+
 
 ---
 
 ## Current Limitations
 
-- Apollo and Explorium data sources are mocked; real API keys would be drop-in replacements
-- MCP retrieval quality depends on available Gmail/Drive context in the connected account
-- Agent steps run sequentially — async parallelization is a planned improvement
-- Vector memory is in-process only and resets on server restart (pgvector migration planned)
+* Apollo and Explorium data sources are mocked; real API keys would be drop-in replacements
+* MCP retrieval quality depends on available Gmail/Drive context in the connected account
+* Agent steps run sequentially — async parallelization is a planned improvement
+* Vector memory is in-process only and resets on server restart (pgvector migration planned)
 
 ---
 
 ## API
 
 ### POST `/run`
+
 Rate limited: 20 requests/minute
 
 ```json
 { "query": "Find high-growth AI SaaS companies in the US" }
+
 ```
 
 ### WebSocket `/ws/run`
-Send: `{ "query": "..." }`  
+
+Send: `{ "query": "..." }`
+
 Receive: stream of `agent_update` events + final `result`
 
 ```json
 { "type": "agent_update", "step": "planner", "status": "done", "detail": "..." }
 { "type": "agent_update", "step": "critic",  "status": "retry", "detail": "..." }
 { "type": "result", "data": { "plan": {}, "results": [], "gtm_strategy": {}, "confidence": 0.87 } }
+
 ```
 
 ---
@@ -286,8 +320,14 @@ Receive: stream of `agent_update` events + final `result`
 ## Observability
 
 Every pipeline run produces a complete audit trail:
-- `reasoning_trace` — human-readable log of every agent decision
-- `spans` — structured tracer events per agent
-- `errors` — accumulated error list
-- `retry_count` — number of critic-triggered replanning cycles
-- `confidence` — final pipeline confidence score (0.0–1.0)
+
+* `reasoning_trace` — human-readable log of every agent decision
+* `spans` — structured tracer events per agent
+* `errors` — accumulated error list
+* `retry_count` — number of critic-triggered replanning cycles
+* `confidence` — final pipeline confidence score (0.0–1.0)
+
+```
+---
+
+```
