@@ -327,4 +327,4 @@ Every pipeline run produces a complete audit trail:
 * `retry_count` — number of critic-triggered replanning cycles
 * `confidence` — final pipeline confidence score (0.0–1.0)
 
-```
+
